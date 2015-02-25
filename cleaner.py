@@ -12,7 +12,7 @@ modification, are permitted provided that the following conditions are met:
     * Redistributions in binary form must reproduce the above copyright
       notice, this list of conditions and the following disclaimer in the
       documentation and/or other materials provided with the distribution.
-    * Neither the name of the Open Technology Group, Inc. nor the
+    * Neither the name of Chander Ganesan nor the
       names of its contributors may be used to endorse or promote products
       derived from this software without specific prior written permission.
 
@@ -84,7 +84,7 @@ class FacebookCleaner(object):
         except TimeoutException:
             return False
     
-    def delete_post(self):
+    def delete_status(self):
         xpaths=["//*[@aria-label='Story options']",
                 "//span[contains(text(), 'Delete')]",
                 "//button[contains(text(), 'Delete Post')]"]
@@ -140,14 +140,10 @@ class FacebookCleaner(object):
         nfcount=0
         nfcount_cycles=0
         for post in posts:
-            if (count % 10) == 0:
-                sys.stdout.write('.')
             if (deleted % 10) == 0:
                 sys.stdout.write('*')
             sys.stdout.flush()
-            count += 1
             timer=0
-            count=0
             try:
                 url=post['actions'][0]['link']
             except KeyError:
@@ -179,7 +175,7 @@ class FacebookCleaner(object):
                             sys.exit(0)
                         continue
                 time.sleep(2)
-                if self.delete_post():
+                if self.delete_status():
                     deleted += 1
                 else: # print the failed entry...
                     self.printer.pprint(post)
