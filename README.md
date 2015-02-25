@@ -1,4 +1,4 @@
-# social-network-cleaner
+# Social Network Cleaner
 
 I built this tool because a popular social networking site didn't provide me a way to limit past posts beyond "Friends".  It also occurred to me that there's little reason for my old statuses, etc. to really be out there (aside from perhaps their value to marketers, etc.)
 
@@ -8,7 +8,7 @@ Right now it only works on a limited subset of stuff - if it encounters anything
 
 This script is written in Python, so it's not necessarily for the faint of heart.
 
-=== Basic Installation ===
+## Basic Installation
 
 1.  Download and install python.
 2.  Download and install the virtualenv tool for python (https://virtualenv.pypa.io/en/latest/) - you might google around for windows instructions (I assume it comes by default with most mac/unix installs.)
@@ -22,6 +22,6 @@ For the API components of this you'll need to get a temporary set of credentials
 
 For example, to remove all posts prior to 2014-06-01 from a users account you can use this command:
 
-python cleaner.py -u <fb username> -e 2014-06-01 -t <api key>
+     python cleaner.py -u <fb username> -e 2014-06-01 -t <api key>
 
 
