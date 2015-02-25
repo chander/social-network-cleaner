@@ -40,6 +40,7 @@ import sys
 import pprint
 import time
 import traceback
+from threading import Timer
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
@@ -110,13 +111,22 @@ class FacebookCleaner(object):
                 ("//*[contains(text(), 'More options')]",False,),
                 ("//span[contains(text(), 'Delete')]",True,),
                 ("//button[contains(text(), 'Delete Post')]", True,),]
+        return self.perform_xpaths(xpaths)
+            
+    def perform_xpaths(self, xpaths):
+        '''
+        Perform a set of xpath queries
+        '''
         for xpath, required in xpaths:
             elem=self.driver.find_elements_by_xpath(xpath)
             if elem:
                 elem=elem[0]
                 if self.is_visible(elem):
                     hover = ActionChains(self.driver).move_to_element(elem).click()
+                    timer=Timer(5, lambda: self.driver.quit())
+                    timer.start()
                     hover.perform()
+                    timer.cancel()
             elif required:
                 print "Failed xpath lookup ({0})".format(xpath)
                 return False
@@ -131,18 +141,7 @@ class FacebookCleaner(object):
         '''
         xpaths=[("//*[contains(text(), 'Delete This Photo')]",False,),
                 ("//button[contains(text(), 'Confirm')]", True,),]
-        for xpath, required in xpaths:
-            elem=self.driver.find_elements_by_xpath(xpath)
-            if elem:
-                elem=elem[0]
-                if self.is_visible(elem):
-                    hover = ActionChains(self.driver).move_to_element(elem).click()
-                    hover.perform()
-            elif required:
-                print "Failed xpath lookup ({0})".format(xpath)
-                return False
-            time.sleep(1)
-        return True
+        return self.perform_xpaths(xpaths)
     
     def delete_album(self):
         '''
@@ -153,18 +152,7 @@ class FacebookCleaner(object):
         xpaths=[("//a[contains(@class,'fbPhotoAlbumOptionsGear')]", True),
                 ("//*[contains(text(), 'Delete Album')]",False,),
                 ("//button[contains(text(), 'Delete Album')]", True,),]
-        for xpath, required in xpaths:
-            elem=self.driver.find_elements_by_xpath(xpath)
-            if elem:
-                elem=elem[0]
-                if self.is_visible(elem):
-                    hover = ActionChains(self.driver).move_to_element(elem).click()
-                    hover.perform()
-            elif required:
-                print "Failed xpath lookup ({0})".format(xpath)
-                return False
-            time.sleep(1)
-        return True
+        return self.perform_xpaths(xpaths)
 
 
     def photo_generator(self, max_date, min_date):
@@ -312,6 +300,7 @@ class FacebookCleaner(object):
         count=0
         while count < 5:
             try:
+                print "Loading URL {0}".format(url)
                 self.driver.get(url)
                 time.sleep(5)
                 break
