@@ -57,7 +57,7 @@ class FacebookCleaner(object):
         try:
             self.profile = self.graph.get_object('me')
         except facebook.GraphAPIError, e:
-            print >>sys.stderr, "Failure to access Graph API: {0}".format(e)
+            print >>sys.stderr, "Failure to access Graph API with token - error: {0}".format(e)
             print >>sys.stderr, "Perhaps you need to get a new one here: https://developers.facebook.com/tools/explorer/"
             sys.exit(1)
         self.id=self.profile['id']
