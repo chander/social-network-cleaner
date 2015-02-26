@@ -32,9 +32,8 @@ from optparse import OptionParser
 from textwrap import dedent
 import facebook
 import getpass
-import dateutil.tz
 import dateutil.parser as dparser
-import datetime
+import tzlocal
 import requests
 import sys
 import pprint
@@ -61,8 +60,6 @@ class FacebookCleaner(object):
             print >>sys.stderr, "Perhaps you need to get a new one here: https://developers.facebook.com/tools/explorer/"
             sys.exit(1)
         self.id=self.profile['id']
-        localtz = dateutil.tz.tzlocal()
-        self.tzoffset=localtz.utcoffset(datetime.datetime.now(localtz))
         self.username=username
         self.password=password
         self.printer=pprint.PrettyPrinter(indent=4)
@@ -193,8 +190,7 @@ class FacebookCleaner(object):
             albums=requests.get(albums['paging']['next']).json()
             
         for album in album_list:
-            album["updated_time"] = datetime.datetime.strptime(album["updated_time"], 
-                                                               "%Y-%m-%dT%H:%M:%S+0000") + self.tzoffset
+            album["updated_time"] = dparser.parse(album["updated_time"])
             if (album['updated_time'] < max_date and 
                 (not min_date or album['updated_time'] > min_date)):
                 
@@ -222,8 +218,7 @@ class FacebookCleaner(object):
         pictures=[]
         picture_types=set()
         for picture in self.photo_generator(max_date, min_date):
-            picture["created_time"] = datetime.datetime.strptime(picture["created_time"], 
-                                                                 "%Y-%m-%dT%H:%M:%S+0000") + self.tzoffset
+            picture["created_time"] = dparser.parse(picture["created_time"])
             if (picture['created_time'] < max_date and 
                 (not min_date or picture['created_time'] > min_date)):   
                 if picture['from']['id'] != self.id:
@@ -232,7 +227,7 @@ class FacebookCleaner(object):
                 if (len(pictures) % 10) == 0:
                     sys.stdout.write('.')
                     sys.stdout.flush()
-        print "There are {0} pictures to be deleted".format(len(pictures))
+        print "\nThere are {0} pictures to be deleted".format(len(pictures))
         for picture in pictures:
             if 'link' in picture:
                 url=picture['link']
@@ -252,8 +247,7 @@ class FacebookCleaner(object):
             for post in feed['data']:
                 # Attempt to make a request to the next page of data, if it exists.
                 
-                post["created_time"] = datetime.datetime.strptime(post["created_time"], 
-                                                                  "%Y-%m-%dT%H:%M:%S+0000") + self.tzoffset
+                post["created_time"] = dparser.parse(post["created_time"])
                 post_types.add(post['type'])
                 if (post['created_time'] < max_date and 
                     (not min_date or post['created_time'] > min_date)):   
@@ -274,10 +268,9 @@ class FacebookCleaner(object):
             feed = requests.get(feed['paging']['next']).json()
             
 #         print "Found items of type {0}".format(', '.join(post_types))
-        print "Found {0} posts to be deleted".format(len(posts))
+        print "\nFound {0} posts to be deleted".format(len(posts))
        
         for post in posts:
-            sys.stdout.flush()
             if 'link' not in post.get('actions',[{}])[0]:
                 continue
             url=post['actions'][0]['link']
@@ -371,7 +364,7 @@ if __name__ == '__main__':
     
     for f in ['max_date', 'min_date']:
         if getattr(options, f):
-            setattr(options, f, dparser.parse(getattr(options,f )))
+            setattr(options, f, dparser.parse(getattr(options,f )).replace(tzinfo=tzlocal.get_localzone()))
     if max(options.clean_posts, options.clean_photos):       
         fbc=FacebookCleaner(token=options.token,
                             username=options.username, password=options.password)
