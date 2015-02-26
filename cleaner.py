@@ -54,16 +54,21 @@ import selenium.webdriver.support.ui as ui
 class FacebookCleaner(object):
     def __init__(self, token, username, password):
         self.graph=facebook.GraphAPI(access_token=token)
-        self.profile = self.graph.get_object('me')
+        try:
+            self.profile = self.graph.get_object('me')
+        except facebook.GraphAPIError, e:
+            print >>sys.stderr, "Failure to access Graph API: {0}".format(e)
+            print >>sys.stderr, "Perhaps you need to get a new one here: https://developers.facebook.com/tools/explorer/"
+            sys.exit(1)
         self.id=self.profile['id']
         localtz = dateutil.tz.tzlocal()
         self.tzoffset=localtz.utcoffset(datetime.datetime.now(localtz))
         self.username=username
         self.password=password
-        
         self.printer=pprint.PrettyPrinter(indent=4)
         self.nfcount=0
         self.nfcount_cycles=0
+        self.deleted=0
               
               
     @property
@@ -87,9 +92,18 @@ class FacebookCleaner(object):
         return self._driver
     
     
+    def graphLookup(self, *args, **kwargs):
+        try:
+            return self.graph.get_connections(*args, **kwargs)
+        except facebook.GraphAPIError, e:
+            print >> sys.stderr, "Failure to access Graph API: {0}".format(e)
+            print >> sys.stderr, "This might be because your deletes took too long - get a new one and restart this tool?"
+            print >> sys.stderr, "Perhaps you need to get a new one here: https://developers.facebook.com/tools/explorer/"
+            sys.exit(1)
+            
     def __del__(self):
-        self.driver.close()
-          
+        if hasattr(self, '_driver'):
+            self._driver.close()
           
     # return True if element is visible within 2 seconds, otherwise False
     def is_visible(self, elem, timeout=2):
@@ -101,7 +115,7 @@ class FacebookCleaner(object):
         except TimeoutException:
             return False
     
-    def delete_status(self):
+    def delete_status(self, url):
         '''
         A simple function to use the Firefox UI to remove a status entry,
         note that this only works if the status is actually a post (as opposed to,
@@ -111,29 +125,34 @@ class FacebookCleaner(object):
                 ("//*[contains(text(), 'More options')]",False,),
                 ("//span[contains(text(), 'Delete')]",True,),
                 ("//button[contains(text(), 'Delete Post')]", True,),]
-        return self.perform_xpaths(xpaths)
+        return self.perform_xpaths(url, xpaths)
             
-    def perform_xpaths(self, xpaths):
+    def perform_xpaths(self, url, xpaths):
         '''
         Perform a set of xpath queries
         '''
+        self.load_page(url)
         for xpath, required in xpaths:
             elem=self.driver.find_elements_by_xpath(xpath)
             if elem:
                 elem=elem[0]
                 if self.is_visible(elem):
                     hover = ActionChains(self.driver).move_to_element(elem).click()
-                    timer=Timer(5, lambda: self.driver.quit())
-                    timer.start()
+#                     timer=Timer(5, lambda: self.driver.quit())
+#                     timer.start()
                     hover.perform()
-                    timer.cancel()
+#                     timer.cancel()
             elif required:
-                print "Failed xpath lookup ({0})".format(xpath)
+                print "Failed xpath lookup ({0}) for URL {1} (aborting)".format(xpath, url)
                 return False
             time.sleep(1)
+        self.deleted += 1
+        if (self.deleted % 10) == 0:
+            sys.stdout.write('*')
+            sys.stdout.flush()
         return True
 
-    def delete_photo(self):
+    def delete_photo(self, url):
         '''
         A simple function to use the Firefox UI to remove a status entry,
         note that this only works if the status is actually a post (as opposed to,
@@ -141,9 +160,9 @@ class FacebookCleaner(object):
         '''
         xpaths=[("//*[contains(text(), 'Delete This Photo')]",False,),
                 ("//button[contains(text(), 'Confirm')]", True,),]
-        return self.perform_xpaths(xpaths)
+        return self.perform_xpaths(url, xpaths)
     
-    def delete_album(self):
+    def delete_album(self, url):
         '''
         A simple function to use the Firefox UI to remove a status entry,
         note that this only works if the status is actually a post (as opposed to,
@@ -152,8 +171,7 @@ class FacebookCleaner(object):
         xpaths=[("//a[contains(@class,'fbPhotoAlbumOptionsGear')]", True),
                 ("//*[contains(text(), 'Delete Album')]",False,),
                 ("//button[contains(text(), 'Delete Album')]", True,),]
-        return self.perform_xpaths(xpaths)
-
+        return self.perform_xpaths(url, xpaths)
 
     def photo_generator(self, max_date, min_date):
         '''
@@ -161,50 +179,46 @@ class FacebookCleaner(object):
         all.  The assumption here is that you already deleted all the albums, so
         the album stuff doesn't really do anything (since the albums are gone)
         '''
-        albums = self.graph.get_connections("me", "albums")
-        album_count=0
+        albums = self.graphLookup("me", "albums")
         album_list=[]
+        # Get a list of albums.  We make the list because sometimes we'll
+        # delete entire albums as we go along, which might mess up the API results.
         while True:
             for album in albums['data']:
                 if album['from']['id'] != self.id:
                     continue
                 album_list.append(album)
-            if albums['paging'].has_key('next'):
-                albums=requests.get(albums['paging']['next']).json()
-            else:
+            if not (albums.has_key('paging') and albums['paging'].has_key('next')):
                 break
+            albums=requests.get(albums['paging']['next']).json()
             
         for album in album_list:
             album["updated_time"] = datetime.datetime.strptime(album["updated_time"], 
                                                                "%Y-%m-%dT%H:%M:%S+0000") + self.tzoffset
             if (album['updated_time'] < max_date and 
                 (not min_date or album['updated_time'] > min_date)):
-                self.load_page(album['link'])
-                if self.delete_album(): # skip the photos if we deleted the album
+                
+                if self.delete_album(album['link']): # skip the photos if we deleted the album
                     continue
-            pictures=self.graph.get_connections(album['id'],"photos")
+            pictures=self.graphLookup(album['id'],"photos")
             while True:
-                try:
-                    for picture in pictures['data']:
-                        yield picture
-                    pictures=requests.get(pictures['paging']['next']).json()
-                except KeyError:
+                for picture in pictures['data']:
+                    yield picture
+                if not (pictures.has_key('paging') and pictures['paging'].has_key('next')):
                     break
+                pictures=requests.get(pictures['paging']['next']).json()
            
-        print "There were {0} albums with photos to be removed".format(album_count)
-        pictures = self.graph.get_connections("me", "photos")    
+        print "There were {0} albums with photos to be removed".format(len(album_list))
+        pictures = self.graphLookup("me", "photos")    
         while True:
             for picture in pictures['data']:
                 yield picture
-            if pictures['paging'].has_key('next'):
-                pictures=requests.get(pictures['paging']['next']).json()
-            else:
-                break       
+            if not (pictures.has_key('paging') and pictures['paging'].has_key('next')):
+                break
+            pictures=requests.get(pictures['paging']['next']).json()     
           
     def clean_photos(self, max_date, min_date=None):
-        count=0
-        deleted=0
-        photo_feed = self.graph.get_connections("me", "photos") # requires read_stream
+        photo_feed = self.graphLookup("me", "photos") # requires read_stream
         pictures=[]
         picture_types=set()
         for picture in self.photo_generator(max_date, min_date):
@@ -220,89 +234,78 @@ class FacebookCleaner(object):
                     sys.stdout.flush()
         print "There are {0} pictures to be deleted".format(len(pictures))
         for picture in pictures:
-            if (deleted % 10) == 0:
-                sys.stdout.write('*')
-            sys.stdout.flush()
-            try:
+            if 'link' in picture:
                 url=picture['link']
-            except KeyError:
-                print "Failed to get link from post!"
-                self.printer.pprint(picture)
+            else:
                 continue
-            self.load_page(url)
-            if self.delete_photo():
-                deleted +=1 
-            else: 
-                print '{0} failed to delete'.format(url)
+            self.delete_photo(url)
+            
             
     def clean_posts(self, max_date, min_date=None):
-        count=0
-        deleted=0
-        feed = self.graph.get_connections("me", "feed") # requires read_stream
+        feed = self.graphLookup("me", "feed") # requires read_stream
         posts=[]
         post_types=set()
         # Get all the posts via the graph API
         while True:
-            try:
-                # Perform some action on each post in the collection we receive from
-                # Facebook.
-                for post in feed['data']:
-                    # Attempt to make a request to the next page of data, if it exists.
-                    
-                    post["created_time"] = datetime.datetime.strptime(post["created_time"], 
-                                                                      "%Y-%m-%dT%H:%M:%S+0000") + self.tzoffset
-                    
-                    post_types.add(post['type'])
-                    if (post['created_time'] < max_date and 
-                        (not min_date or post['created_time'] > min_date)):   
-                        #print "Deleting item from feed {0}".format(post["created_time"])
-                        if post['from']['id'] != self.id:
-                            continue
-                        if post['type'] not in ('status', 'link','photo', 'video',):
-                            continue
-                        if 'are now friends.' in post.get('story', ''):
-                            # This is a new friend added post.
-                            continue
-                        posts.append(post)
-                        if (len(posts) % 10) == 0:
-                            sys.stdout.write('.')
-                            sys.stdout.flush()
-                feed = requests.get(feed['paging']['next']).json()
-            except KeyError:
-                # When there are no more pages (['paging']['next']), break from the
-                # loop and end the script.
+            # Perform some action on each post in the collection we receive from
+            # Facebook.
+            for post in feed['data']:
+                # Attempt to make a request to the next page of data, if it exists.
+                
+                post["created_time"] = datetime.datetime.strptime(post["created_time"], 
+                                                                  "%Y-%m-%dT%H:%M:%S+0000") + self.tzoffset
+                post_types.add(post['type'])
+                if (post['created_time'] < max_date and 
+                    (not min_date or post['created_time'] > min_date)):   
+                    #print "Deleting item from feed {0}".format(post["created_time"])
+                    if post['from']['id'] != self.id:
+                        continue
+                    if post['type'] not in ('status', 'link','photo', 'video',):
+                        continue
+                    if 'are now friends.' in post.get('story', ''):
+                        # This is a new friend added post.
+                        continue
+                    posts.append(post)
+                    if (len(posts) % 10) == 0:
+                        sys.stdout.write('.')
+                        sys.stdout.flush()
+            if not (feed.has_key('paging') and feed['paging'].has_key('next')):
                 break
-        print "Found items of type {0}".format(', '.join(post_types))
-        print "\\Found {0} posts to be deleted".format(len(posts))
+            feed = requests.get(feed['paging']['next']).json()
+            
+#         print "Found items of type {0}".format(', '.join(post_types))
+        print "Found {0} posts to be deleted".format(len(posts))
        
         for post in posts:
-            if (deleted % 10) == 0:
-                sys.stdout.write('*')
             sys.stdout.flush()
-            try:
-                url=post['actions'][0]['link']
-            except KeyError:
-                print "Failed to get link from post!"
-                self.printer.pprint(post)
+            if 'link' not in post.get('actions',[{}])[0]:
                 continue
-            try:
-                self.load_page(url)
-                if post['type'] in ('link', 'status', 'photo', 'video'):
-                    if self.delete_status():
-                        deleted += 1
-                else: # print the failed entry...
-                    self.printer.pprint(post)
-            except Exception,e:
-                traceback.print_exc()
+            url=post['actions'][0]['link']
+            if post['type'] in ('link', 'status', 'photo', 'video'):
+                self.delete_status(url)
             time.sleep(5)       
     
     def load_page(self, url):
         count=0
         while count < 5:
             try:
-                print "Loading URL {0}".format(url)
+#                 print "Loading URL {0}".format(url)
                 self.driver.get(url)
                 time.sleep(5)
+                if "Page Not Found" in self.driver.title:
+                    self.nfcount+=1
+                    if self.nfcount < 10:
+                        time.sleep(2)
+                        continue
+                    else:
+                        print "Too many failed requests, sleeping for 2 hours"
+                        time.sleep(60*60*2)
+                        self.nfcount_cycles += 1
+                        self.nfcount=0
+                        if self.nfcount_cycles > 10:
+                            print "Exiting - too many failures"
+                            sys.exit(0)
+                        continue
                 break
             except:
                 time.sleep(3)
@@ -310,20 +313,6 @@ class FacebookCleaner(object):
             else:
                 print "Failed to load {0}".format(url)
                 continue
-            if "Page Not Found" in self.driver.title:
-                self.nfcount+=1
-                if self.nfcount < 10:
-                    time.sleep(2)
-                    continue
-                else:
-                    print "Too many failed requests, sleeping for 2 hours"
-                    time.sleep(60*60*2)
-                    self.nfcount_cycles += 1
-                    self.nfcount=0
-                    if self.nfcount_cycles > 10:
-                        print "Exiting - too many failures"
-                        sys.exit(0)
-                    continue
             
     
 if __name__ == '__main__':
