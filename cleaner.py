@@ -180,6 +180,7 @@ class FacebookCleaner(object):
                 break
             albums=requests.get(albums['paging']['next']).json()
             
+        delete_albums=0
         for album in album_list:
             album["updated_time"] = dparser.parse(album["updated_time"])
             if (album['updated_time'] < max_date and 
@@ -187,6 +188,7 @@ class FacebookCleaner(object):
                 
                 if self.delete_album(album['link']): # skip the photos if we deleted the album
                     continue
+                delete_albums+=1
             pictures=self.graphLookup(album['id'],"photos")
             while True:
                 for picture in pictures['data']:
@@ -195,7 +197,7 @@ class FacebookCleaner(object):
                     break
                 pictures=requests.get(pictures['paging']['next']).json()
            
-        print "There were {0} albums with photos to be removed".format(len(album_list))
+        print "There were {0} album(s) with photos to be removed".format(delete_albums)
         pictures = self.graphLookup("me", "photos")    
         while True:
             for picture in pictures['data']:
