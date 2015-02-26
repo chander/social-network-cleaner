@@ -135,9 +135,7 @@ class FacebookCleaner(object):
     
     def delete_status(self, url):
         '''
-        A simple function to use the Firefox UI to remove a status entry,
-        note that this only works if the status is actually a post (as opposed to,
-        for example, a photo upload status.)
+        A simple function to use the Firefox UI to remove a status entry.
         '''
         xpaths=[("//*[@aria-label='Story options']", True,),
                 ("//*[contains(text(), 'More options')]",False,),
@@ -147,9 +145,7 @@ class FacebookCleaner(object):
     
     def delete_photo(self, url):
         '''
-        A simple function to use the Firefox UI to remove a status entry,
-        note that this only works if the status is actually a post (as opposed to,
-        for example, a photo upload status.)
+        A simple function to use the Firefox UI to remove a photo.
         '''
         xpaths=[("//*[contains(text(), 'Delete This Photo')]",False,),
                 ("//button[contains(text(), 'Confirm')]", True,),]
@@ -157,9 +153,7 @@ class FacebookCleaner(object):
     
     def delete_album(self, url):
         '''
-        A simple function to use the Firefox UI to remove a status entry,
-        note that this only works if the status is actually a post (as opposed to,
-        for example, a photo upload status.)
+        A simple function to use the Firefox UI to remove an album.
         '''
         xpaths=[("//a[contains(@class,'fbPhotoAlbumOptionsGear')]", True),
                 ("//*[contains(text(), 'Delete Album')]",False,),
@@ -169,8 +163,9 @@ class FacebookCleaner(object):
     def photo_generator(self, max_date, min_date):
         '''
         A generator that iterates over all the photos and albums to return them
-        all.  The assumption here is that you already deleted all the albums, so
-        the album stuff doesn't really do anything (since the albums are gone)
+        all.  The albums (if any) are deleted as it goes along, unless it finds
+        that the update timestamp makes it ineligible for deletion - in which
+        case it just recurses through the photos therein
         '''
         albums = self.graphLookup("me", "albums")
         album_list=[]
@@ -210,6 +205,14 @@ class FacebookCleaner(object):
             pictures=requests.get(pictures['paging']['next']).json()     
           
     def clean_photos(self, max_date, min_date=None):
+        '''
+        Use the photo generator to get a list of all photos in all albums,
+        and then delete them. In this case the albums actually will get
+        deleted by the generator (assuming they have been last updated
+        before the delete range.)  This is much better, since deleting an 
+        album deletes all the photos inside it (as opposed to having to
+        delete each one.)
+        '''
         photo_feed = self.graphLookup("me", "photos") # requires read_stream
         pictures=[]
         picture_types=set()
@@ -233,6 +236,12 @@ class FacebookCleaner(object):
             
             
     def clean_posts(self, max_date, min_date=None):
+        '''
+        Iterate over the posts for an account and delete them if possible,
+        note that many posts aren't deleteable for various reasons, so in those
+        cases you'll just get a link to the post and an error message (which you'll
+        need to deal with on your own.)
+        '''
         feed = self.graphLookup("me", "feed") # requires read_stream
         posts=[]
         post_types=set()
