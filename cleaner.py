@@ -48,8 +48,6 @@ from selenium.webdriver.common.by import By
 import selenium.webdriver.support.expected_conditions as EC
 import selenium.webdriver.support.ui as ui
 
-
-
 class FacebookCleaner(object):
     def __init__(self, token, username, password):
         self.graph=facebook.GraphAPI(access_token=token)
@@ -66,7 +64,6 @@ class FacebookCleaner(object):
         self.nfcount=0
         self.nfcount_cycles=0
         self.deleted=0
-              
               
     @property
     def driver(self):
@@ -87,7 +84,6 @@ class FacebookCleaner(object):
             elem.send_keys(Keys.RETURN)
             time.sleep(5)
         return self._driver
-    
     
     def graphLookup(self, *args, **kwargs):
         try:
@@ -111,18 +107,6 @@ class FacebookCleaner(object):
             return True
         except TimeoutException:
             return False
-    
-    def delete_status(self, url):
-        '''
-        A simple function to use the Firefox UI to remove a status entry,
-        note that this only works if the status is actually a post (as opposed to,
-        for example, a photo upload status.)
-        '''
-        xpaths=[("//*[@aria-label='Story options']", True,),
-                ("//*[contains(text(), 'More options')]",False,),
-                ("//span[contains(text(), 'Delete')]",True,),
-                ("//button[contains(text(), 'Delete Post')]", True,),]
-        return self.perform_xpaths(url, xpaths)
             
     def perform_xpaths(self, url, xpaths):
         '''
@@ -148,7 +132,19 @@ class FacebookCleaner(object):
             sys.stdout.write('*')
             sys.stdout.flush()
         return True
-
+    
+    def delete_status(self, url):
+        '''
+        A simple function to use the Firefox UI to remove a status entry,
+        note that this only works if the status is actually a post (as opposed to,
+        for example, a photo upload status.)
+        '''
+        xpaths=[("//*[@aria-label='Story options']", True,),
+                ("//*[contains(text(), 'More options')]",False,),
+                ("//span[contains(text(), 'Delete')]",True,),
+                ("//button[contains(text(), 'Delete Post')]", True,),]
+        return self.perform_xpaths(url, xpaths)
+    
     def delete_photo(self, url):
         '''
         A simple function to use the Firefox UI to remove a status entry,
