@@ -373,8 +373,23 @@ if __name__ == '__main__':
     if max(options.clean_posts, options.clean_photos):       
         fbc=FacebookCleaner(token=options.token,
                             username=options.username, password=options.password)
-    if options.clean_posts:
+    print dedent('''
+        Sometimes the browser page fails to load, and things get stuck!
         
+        To fix this, there are a couple things you can do:
+            1.  After the FF window opens, make it narrower - so 
+                that the ads and messenger are not visible in your browser window.
+            2.  If you notice it being "stuck" (i.e. the page is loading for a long time) press the
+                browser's "stop" button, then wait a few seconds and things should continue
+                normally.
+                
+        Sorry, but unfortunately Selenium doesn't have a component that lets the script hit "stop",
+        so it's a manual thing.
+        
+        Note: If you close the browser window, things will likely stop working.  
+              Leave it open and watch the magic!
+    ''')
+    if options.clean_posts:
         fbc.clean_posts(max_date=options.max_date,
                         min_date=options.min_date)
     if options.clean_photos:
