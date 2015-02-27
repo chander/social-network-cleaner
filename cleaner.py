@@ -461,6 +461,11 @@ if __name__ == '__main__':
         
         DANGER DANGER DANGER DANGER DANGER DANGER DANGER DANGER DANGER DANGER 
     ''')
+    
+    answer=raw_input('This tool could remove portions of, or all of, your facebook account - are you sure you wish to continue (yes/N)? ')
+    if answer.lower().strip() != 'yes':
+        print "Please enter 'yes' to run this!"
+        sys.exit(3)
     if options.clean_posts:
         fbc.clean_posts(max_date=options.max_date,
                         min_date=options.min_date)
