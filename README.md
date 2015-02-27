@@ -22,7 +22,7 @@ For the API components of this you'll need to get a temporary set of credentials
 
 For example, to remove all posts prior to 2014-06-01 from a users account you can use this command:
 
-     python cleaner.py -u <fb username> -e 2014-06-01 -t <api key>
+     python cleaner.py -u <fb username> -e 2014-06-01
 
 If you feel like enhancing things, I welcome pull requests - feel free to log issues as well (though I have a job, so I'm not sure how quick I'll be able to address things.)
 
