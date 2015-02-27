@@ -264,10 +264,12 @@ class FacebookCleaner(object):
             self.delete_photo(url)
             
     def get_api_token(self):
+        main_window_handle=self.driver.window_handles[0]
         delay=self.delay
         self.delay=5
         url='https://developers.facebook.com/tools/explorer/'
         xpaths=[("//*[@id='get_access_token']", True,),
+                ("//a[contains(text(), 'Clear')]", True,),
                 ("//input[@name='user_status']",False,),
                 ("//input[@name='user_relationship']",False,),
                 ("//input[@name='user_photos']",False,),
@@ -283,13 +285,15 @@ class FacebookCleaner(object):
         time.sleep(3)
         if len(self.driver.window_handles) > 1:
             for handle in self.driver.window_handles:
-                self.driver.switch_to_window(handle)
+                try:
+                    self.driver.switch_to_window(handle)
+                except: continue
 #                 print "move to handle ... {0}".format(self.driver.title)
                 if 'Log in' in self.driver.title:
 #                     print "Found page with title {0}".format(self.driver.title)
                     xpaths=[("//button[contains(text(), 'Okay')]", True,)]
                     self.perform_xpaths(None, xpaths)
-            self.driver.switch_to_default_content()
+            self.driver.switch_to_window(main_window_handle)
         elem=self.driver.find_element_by_id("access_token")
         token=elem.get_attribute("value");
 #         print token
