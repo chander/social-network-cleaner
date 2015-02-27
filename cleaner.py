@@ -49,40 +49,65 @@ import selenium.webdriver.support.expected_conditions as EC
 import selenium.webdriver.support.ui as ui
 
 class FacebookCleaner(object):
-    def __init__(self, token, username, password):
-        self.graph=facebook.GraphAPI(access_token=token)
-        try:
-            self.profile = self.graph.get_object('me')
-        except facebook.GraphAPIError, e:
-            print >>sys.stderr, "Failure to access Graph API with token - error: {0}".format(e)
-            print >>sys.stderr, "Perhaps you need to get a new one here: https://developers.facebook.com/tools/explorer/"
-            sys.exit(1)
-        self.id=self.profile['id']
+    def __init__(self, username, password):
+        self.login=False
         self.username=username
         self.password=password
         self.printer=pprint.PrettyPrinter(indent=4)
         self.nfcount=0
         self.nfcount_cycles=0
         self.deleted=0
-              
+        self.delay=1
+        
+     
+    @property       
+    def graph(self):
+        '''
+        Intialize the graph stuff on the first attempt, or if the token is more
+        than 3300 seconds old (since I think they expire after ~ 1 hour, and we need
+        likely no more than 5 minutes to query the API in a single request set.)
+        '''
+        if (not getattr(self, '_graph', None)) or self.token_expires < time.time():
+            token=self.get_api_token()
+            self.token_expires=time.time()+3300
+            self._graph=facebook.GraphAPI(access_token=token)
+            try:
+                self.profile = self._graph.get_object('me')
+                self.id=self.profile['id']
+            except facebook.GraphAPIError, e:
+                print >>sys.stderr, "Failure to access Graph API with token - error: {0}".format(e)
+                print >>sys.stderr, "Perhaps you need to get a new one here: https://developers.facebook.com/tools/explorer/"
+                sys.exit(1)
+        return self._graph
+      
     @property
     def driver(self):
         '''
         Load the browser and driver when it's first requested/used, rather than
         when the object is initialized.
         '''
-        if not hasattr(self, '_driver'):
-            self._driver = webdriver.Firefox()
-            # or you can use Chrome(executable_path="/usr/bin/chromedriver")
-            self._driver.set_page_load_timeout(5)
-            self._driver.get("http://www.facebook.com")
-            assert "Facebook" in self._driver.title
-            elem = self._driver.find_element_by_id("email")
-            elem.send_keys(self.username)
-            elem = self._driver.find_element_by_id("pass")
-            elem.send_keys(self.password)
-            elem.send_keys(Keys.RETURN)
-            time.sleep(5)
+        attempts=0
+        while not self.login:
+            try:
+                if not getattr(self, '_driver', None):
+                    self._driver = webdriver.Firefox()
+                # or you can use Chrome(executable_path="/usr/bin/chromedriver")
+                self._driver.set_page_load_timeout(10)
+                self._driver.get("http://www.facebook.com")
+                assert "Facebook" in self._driver.title
+                elem = self._driver.find_element_by_id("email")
+                elem.send_keys(self.username)
+                elem = self._driver.find_element_by_id("pass")
+                elem.send_keys(self.password)
+                elem.send_keys(Keys.RETURN)
+                self.login=True
+                time.sleep(5)
+            except:
+                attempts += 1
+                if attempts > 5:
+                    sys.stderr.write('Login failed - perhaps facebook is slow?!\n')
+                    sys.exit(2)
+                
         return self._driver
     
     def graphLookup(self, *args, **kwargs):
@@ -112,8 +137,10 @@ class FacebookCleaner(object):
         '''
         Perform a set of xpath queries
         '''
-        self.load_page(url)
+        if url:
+            self.load_page(url)
         for xpath, required in xpaths:
+#             print "Trying {0} on {1}".format(url, xpath)
             elem=self.driver.find_elements_by_xpath(xpath)
             if elem:
                 elem=elem[0]
@@ -126,7 +153,7 @@ class FacebookCleaner(object):
             elif required:
                 print "Failed xpath lookup ({0}) for URL {1} (aborting)".format(xpath, url)
                 return False
-            time.sleep(1)
+            time.sleep(self.delay)
         self.deleted += 1
         if (self.deleted % 10) == 0:
             sys.stdout.write('*')
@@ -236,7 +263,39 @@ class FacebookCleaner(object):
                 continue
             self.delete_photo(url)
             
-            
+    def get_api_token(self):
+        delay=self.delay
+        self.delay=5
+        url='https://developers.facebook.com/tools/explorer/'
+        xpaths=[("//*[@id='get_access_token']", True,),
+                ("//input[@name='user_status']",False,),
+                ("//input[@name='user_relationship']",False,),
+                ("//input[@name='user_photos']",False,),
+                ("//input[@name='user_videos']",False,),
+                ("//input[@name='user_interests']",False,),
+                ("//input[@name='user_friends']",False,),
+                ("//input[@name='user_events']",False,),
+                ("//*[@data-group='extended']",True,),
+                ("//input[@name='read_stream']",False,),
+                ("//button[contains(text(), 'Get Access Token')]", True,)
+                ]
+        self.perform_xpaths(url, xpaths)
+        time.sleep(3)
+        if len(self.driver.window_handles) > 1:
+            for handle in self.driver.window_handles:
+                self.driver.switch_to_window(handle)
+#                 print "move to handle ... {0}".format(self.driver.title)
+                if 'Log in' in self.driver.title:
+#                     print "Found page with title {0}".format(self.driver.title)
+                    xpaths=[("//button[contains(text(), 'Okay')]", True,)]
+                    self.perform_xpaths(None, xpaths)
+            self.driver.switch_to_default_content()
+        elem=self.driver.find_element_by_id("access_token")
+        token=elem.get_attribute("value");
+#         print token
+        self.delay=delay
+        return token
+        
     def clean_posts(self, max_date, min_date=None):
         '''
         Iterate over the posts for an account and delete them if possible,
@@ -337,9 +396,9 @@ if __name__ == '__main__':
     parser.add_option("-e", "--max_date",
                       dest="max_date", default=None,
                       help="The date of the most recent item to delete (inclusive) (end_date)")
-    parser.add_option("-t", "--token",
-                      dest="token", default=None,
-                      help="Your facebook Graph API token (get it here: https://developers.facebook.com/tools/explorer/)")
+#     parser.add_option("-t", "--token",
+#                       dest="token", default=None,
+#                       help="Your facebook Graph API token (get it here: https://developers.facebook.com/tools/explorer/)")
     parser.add_option("-u", "--username",
                       dest="username", default=None,
                       help="Your facebook username")
@@ -356,7 +415,7 @@ if __name__ == '__main__':
                       help="Remove Posts")
 
     (options, args) = parser.parse_args()
-    required_arguments=['token','max_date','username',]
+    required_arguments=['max_date','username',]
     
     for arg in required_arguments:
         missing_args=[]
@@ -373,7 +432,7 @@ if __name__ == '__main__':
         if getattr(options, f):
             setattr(options, f, dparser.parse(getattr(options,f )).replace(tzinfo=tzlocal.get_localzone()))
     if max(options.clean_posts, options.clean_photos):       
-        fbc=FacebookCleaner(token=options.token,
+        fbc=FacebookCleaner(#token=options.token,
                             username=options.username, password=options.password)
     print dedent('''
         Sometimes the browser page fails to load, and things get stuck!
