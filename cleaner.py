@@ -453,6 +453,13 @@ if __name__ == '__main__':
         
         Note: If you close the browser window, things will likely stop working.  
               Leave it open and watch the magic!
+    
+        DANGER DANGER DANGER DANGER DANGER DANGER DANGER DANGER DANGER DANGER 
+        
+        YOUR FACEBOOK DATA COULD BE DELETED - PRESS CONTROL-C TO ABORT THIS
+        PROCESS NOW, IF YOU DON'T WANT THAT TO HAPPEN!!!!
+        
+        DANGER DANGER DANGER DANGER DANGER DANGER DANGER DANGER DANGER DANGER 
     ''')
     if options.clean_posts:
         fbc.clean_posts(max_date=options.max_date,
