@@ -10,17 +10,20 @@ This script is written in Python, so it's not necessarily for the faint of heart
 
 ## Basic Installation
 
-1.  Download and install python.
-2.  Download and install the virtualenv tool for python (https://virtualenv.pypa.io/en/latest/) - you might google around for windows instructions (I assume it comes by default with most mac/unix installs.)
-3.  Checkout this code to some local spot (Checkout the "cloning a repo" instructions here http://git-scm.com/book/en/v2/Git-Basics-Getting-a-Git-Repository)
-4.  Change to the directory you checked stuff out in and create a virtual environment (virtualenv venv)
-5.  Start the venv (source venv/bin/activate)
-6.  Install the pre-requisites (pip install -r requirements.txt)
-7.  Run the tool.
+1.  Download and install Python.
+2.  Download and install [the virtualenv tool for Python](https://virtualenv.pypa.io/en/latest/)
+ * On Debian / Ubuntu: `sudo apt-get install python-virtualenv`
+ * On Window you might need to Google for instructions.
+3.  Clone this repository: `git clone git@github.com:chander/social-network-cleaner.git` ([Or just download and extract the Zip](https://github.com/chander/social-network-cleaner/archive/master.zip).)
+4.  Navigate to the source directory: `cd social-network-cleaner`
+5.  Create a virtual environment: `virtualenv venv`
+6.  Start the venv: `source venv/bin/activate`
+7.  Install the required Python dependencies: `pip install -r requirements.txt`
+8.  Run the tool: `python cleaner.py --help`
 
 For example, to remove all posts prior to 2014-06-01 from a users account you can use this command:
 
-     python cleaner.py -u <fb username> -e 2014-06-01
+     python cleaner.py -u <fb username> -e 2014-06-01 --posts
 
 If you feel like enhancing things, I welcome pull requests - feel free to log issues as well (though I have a job, so I'm not sure how quick I'll be able to address things.)
 
