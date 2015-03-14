@@ -140,16 +140,12 @@ class FacebookCleaner(object):
         if url:
             self.load_page(url)
         for xpath, required in xpaths:
-#             print "Trying {0} on {1}".format(url, xpath)
             elem=self.driver.find_elements_by_xpath(xpath)
             if elem:
                 elem=elem[0]
                 if self.is_visible(elem):
                     hover = ActionChains(self.driver).move_to_element(elem).click()
-#                     timer=Timer(5, lambda: self.driver.quit())
-#                     timer.start()
                     hover.perform()
-#                     timer.cancel()
             elif required:
                 print "Failed xpath lookup ({0}) for URL {1} (aborting)".format(xpath, url)
                 return False
@@ -287,16 +283,14 @@ class FacebookCleaner(object):
             for handle in self.driver.window_handles:
                 try:
                     self.driver.switch_to_window(handle)
-                except: continue
-#                 print "move to handle ... {0}".format(self.driver.title)
+                except:
+                    continue
                 if 'Log in' in self.driver.title:
-#                     print "Found page with title {0}".format(self.driver.title)
                     xpaths=[("//button[contains(text(), 'Okay')]", True,)]
                     self.perform_xpaths(None, xpaths)
             self.driver.switch_to_window(main_window_handle)
         elem=self.driver.find_element_by_id("access_token")
         token=elem.get_attribute("value");
-#         print token
         self.delay=delay
         return token
 
@@ -321,7 +315,6 @@ class FacebookCleaner(object):
                 post_types.add(post['type'])
                 if (post['created_time'] < max_date and
                     (not min_date or post['created_time'] > min_date)):
-                    #print "Deleting item from feed {0}".format(post["created_time"])
                     if post['from']['id'] != self.id:
                         continue
                     if post['type'] not in ('status', 'link','photo', 'video',):
@@ -337,7 +330,6 @@ class FacebookCleaner(object):
                 break
             feed = requests.get(feed['paging']['next']).json()
 
-#         print "Found items of type {0}".format(', '.join(post_types))
         print "\nFound {0} posts to be deleted".format(len(posts))
 
         for post in posts:
@@ -352,7 +344,6 @@ class FacebookCleaner(object):
         count=0
         while count < 5:
             try:
-#                 print "Loading URL {0}".format(url)
                 self.driver.get(url)
                 time.sleep(5)
                 if "Page Not Found" in self.driver.title:
