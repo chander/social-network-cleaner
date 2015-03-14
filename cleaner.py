@@ -93,7 +93,7 @@ class FacebookCleaner(object):
                     self._driver = webdriver.Firefox()
                 # or you can use Chrome(executable_path="/usr/bin/chromedriver")
                 self._driver.set_page_load_timeout(10)
-                self._driver.get("http://www.facebook.com")
+                self._driver.get("https://www.facebook.com")
                 assert "Facebook" in self._driver.title
                 elem = self._driver.find_element_by_id("email")
                 elem.send_keys(self.username)
