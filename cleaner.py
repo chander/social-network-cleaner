@@ -437,9 +437,11 @@ if __name__ == '__main__':
         Sometimes the browser page fails to load, and things get stuck!
 
         To fix this, there are a couple things you can do:
-            1.  After the FF window opens, make it narrower - so
+            1.  If the FF window opens but no webpage is loaded you might need to upgrade
+                Selenium. Update the version in requirements.txt and re-install the depdendencies.
+            2.  After the FF window opens, make it narrower - so
                 that the ads and messenger are not visible in your browser window.
-            2.  If you notice it being "stuck" (i.e. the page is loading for a long time) press the
+            3.  If you notice it being "stuck" (i.e. the page is loading for a long time) press the
                 browser's "stop" button, then wait a few seconds and things should continue
                 normally.
 
