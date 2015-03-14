@@ -92,6 +92,7 @@ class FacebookCleaner(object):
             try:
                 if not getattr(self, '_driver', None):
                     self._driver = webdriver.Firefox()
+                    self._driver.set_window_size(800, 600)
                 # or you can use Chrome(executable_path="/usr/bin/chromedriver")
                 self._driver.set_page_load_timeout(10)
                 self._driver.get("https://www.facebook.com")
