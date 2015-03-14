@@ -17,8 +17,6 @@ This script is written in Python, so it's not necessarily for the faint of heart
 5.  Start the venv (source venv/bin/activate)
 6.  Install the pre-requisites (pip install -r requirements.txt)
 7.  Run the tool.
-  
-For the API components of this you'll need to get a temporary set of credentials (if you run the command there's some docs there...)
 
 For example, to remove all posts prior to 2014-06-01 from a users account you can use this command:
 

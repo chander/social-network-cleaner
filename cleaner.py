@@ -400,9 +400,6 @@ if __name__ == '__main__':
     parser.add_option("-e", "--max_date",
                       dest="max_date", default=None,
                       help="The date of the most recent item to delete (inclusive) (end_date)")
-#     parser.add_option("-t", "--token",
-#                       dest="token", default=None,
-#                       help="Your facebook Graph API token (get it here: https://developers.facebook.com/tools/explorer/)")
     parser.add_option("-u", "--username",
                       dest="username", default=None,
                       help="Your facebook username")
@@ -436,8 +433,7 @@ if __name__ == '__main__':
         if getattr(options, f):
             setattr(options, f, dparser.parse(getattr(options,f )).replace(tzinfo=tzlocal.get_localzone()))
     if max(options.clean_posts, options.clean_photos):
-        fbc=FacebookCleaner(#token=options.token,
-                            username=options.username, password=options.password)
+        fbc=FacebookCleaner(username=options.username, password=options.password)
     print dedent('''
         Sometimes the browser page fails to load, and things get stuck!
 
