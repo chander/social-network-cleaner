@@ -58,9 +58,9 @@ class FacebookCleaner(object):
         self.nfcount_cycles=0
         self.deleted=0
         self.delay=1
-        
-     
-    @property       
+
+
+    @property
     def graph(self):
         '''
         Intialize the graph stuff on the first attempt, or if the token is more
@@ -79,7 +79,7 @@ class FacebookCleaner(object):
                 print >>sys.stderr, "Perhaps you need to get a new one here: https://developers.facebook.com/tools/explorer/"
                 sys.exit(1)
         return self._graph
-      
+
     @property
     def driver(self):
         '''
@@ -107,9 +107,9 @@ class FacebookCleaner(object):
                 if attempts > 5:
                     sys.stderr.write('Login failed - perhaps facebook is slow?!\n')
                     sys.exit(2)
-                
+
         return self._driver
-    
+
     def graphLookup(self, *args, **kwargs):
         try:
             return self.graph.get_connections(*args, **kwargs)
@@ -118,11 +118,11 @@ class FacebookCleaner(object):
             print >> sys.stderr, "This might be because your deletes took too long - get a new one and restart this tool?"
             print >> sys.stderr, "Perhaps you need to get a new one here: https://developers.facebook.com/tools/explorer/"
             sys.exit(1)
-            
+
     def __del__(self):
         if hasattr(self, '_driver'):
             self._driver.close()
-          
+
     # return True if element is visible within 2 seconds, otherwise False
     def is_visible(self, elem, timeout=2):
         time.sleep(.5)
@@ -132,7 +132,7 @@ class FacebookCleaner(object):
             return True
         except TimeoutException:
             return False
-            
+
     def perform_xpaths(self, url, xpaths):
         '''
         Perform a set of xpath queries
@@ -159,7 +159,7 @@ class FacebookCleaner(object):
             sys.stdout.write('*')
             sys.stdout.flush()
         return True
-    
+
     def delete_status(self, url):
         '''
         A simple function to use the Firefox UI to remove a status entry.
@@ -169,7 +169,7 @@ class FacebookCleaner(object):
                 ("//span[contains(text(), 'Delete')]",True,),
                 ("//button[contains(text(), 'Delete Post')]", True,),]
         return self.perform_xpaths(url, xpaths)
-    
+
     def delete_photo(self, url):
         '''
         A simple function to use the Firefox UI to remove a photo.
@@ -177,7 +177,7 @@ class FacebookCleaner(object):
         xpaths=[("//*[contains(text(), 'Delete This Photo')]",False,),
                 ("//button[contains(text(), 'Confirm')]", True,),]
         return self.perform_xpaths(url, xpaths)
-    
+
     def delete_album(self, url):
         '''
         A simple function to use the Firefox UI to remove an album.
@@ -206,13 +206,13 @@ class FacebookCleaner(object):
             if not (albums.has_key('paging') and albums['paging'].has_key('next')):
                 break
             albums=requests.get(albums['paging']['next']).json()
-            
+
         delete_albums=0
         for album in album_list:
             album["updated_time"] = dparser.parse(album["updated_time"])
-            if (album['updated_time'] < max_date and 
+            if (album['updated_time'] < max_date and
                 (not min_date or album['updated_time'] > min_date)):
-                
+
                 if self.delete_album(album['link']): # skip the photos if we deleted the album
                     continue
                 delete_albums+=1
@@ -223,22 +223,22 @@ class FacebookCleaner(object):
                 if not (pictures.has_key('paging') and pictures['paging'].has_key('next')):
                     break
                 pictures=requests.get(pictures['paging']['next']).json()
-           
+
         print "There were {0} album(s) with photos to be removed".format(delete_albums)
-        pictures = self.graphLookup("me", "photos")    
+        pictures = self.graphLookup("me", "photos")
         while True:
             for picture in pictures['data']:
                 yield picture
             if not (pictures.has_key('paging') and pictures['paging'].has_key('next')):
                 break
-            pictures=requests.get(pictures['paging']['next']).json()     
-          
+            pictures=requests.get(pictures['paging']['next']).json()
+
     def clean_photos(self, max_date, min_date=None):
         '''
         Use the photo generator to get a list of all photos in all albums,
         and then delete them. In this case the albums actually will get
         deleted by the generator (assuming they have been last updated
-        before the delete range.)  This is much better, since deleting an 
+        before the delete range.)  This is much better, since deleting an
         album deletes all the photos inside it (as opposed to having to
         delete each one.)
         '''
@@ -247,8 +247,8 @@ class FacebookCleaner(object):
         picture_types=set()
         for picture in self.photo_generator(max_date, min_date):
             picture["created_time"] = dparser.parse(picture["created_time"])
-            if (picture['created_time'] < max_date and 
-                (not min_date or picture['created_time'] > min_date)):   
+            if (picture['created_time'] < max_date and
+                (not min_date or picture['created_time'] > min_date)):
                 if picture['from']['id'] != self.id:
                     continue
                 pictures.append(picture)
@@ -262,7 +262,7 @@ class FacebookCleaner(object):
             else:
                 continue
             self.delete_photo(url)
-            
+
     def get_api_token(self):
         main_window_handle=self.driver.window_handles[0]
         delay=self.delay
@@ -299,7 +299,7 @@ class FacebookCleaner(object):
 #         print token
         self.delay=delay
         return token
-        
+
     def clean_posts(self, max_date, min_date=None):
         '''
         Iterate over the posts for an account and delete them if possible,
@@ -316,11 +316,11 @@ class FacebookCleaner(object):
             # Facebook.
             for post in feed['data']:
                 # Attempt to make a request to the next page of data, if it exists.
-                
+
                 post["created_time"] = dparser.parse(post["created_time"])
                 post_types.add(post['type'])
-                if (post['created_time'] < max_date and 
-                    (not min_date or post['created_time'] > min_date)):   
+                if (post['created_time'] < max_date and
+                    (not min_date or post['created_time'] > min_date)):
                     #print "Deleting item from feed {0}".format(post["created_time"])
                     if post['from']['id'] != self.id:
                         continue
@@ -336,18 +336,18 @@ class FacebookCleaner(object):
             if not (feed.has_key('paging') and feed['paging'].has_key('next')):
                 break
             feed = requests.get(feed['paging']['next']).json()
-            
+
 #         print "Found items of type {0}".format(', '.join(post_types))
         print "\nFound {0} posts to be deleted".format(len(posts))
-       
+
         for post in posts:
             if 'link' not in post.get('actions',[{}])[0]:
                 continue
             url=post['actions'][0]['link']
             if post['type'] in ('link', 'status', 'photo', 'video'):
                 self.delete_status(url)
-            time.sleep(5)       
-    
+            time.sleep(5)
+
     def load_page(self, url):
         count=0
         while count < 5:
@@ -376,23 +376,23 @@ class FacebookCleaner(object):
             else:
                 print "Failed to load {0}".format(url)
                 continue
-            
-    
+
+
 if __name__ == '__main__':
     description='''
     A tool to (permanently?) remove items from a users facebook history.
-    
+
     This script uses the Facebook Graph API to retrieve data for a user
     account, and then remove each item that falls within a provided time range.
-    
-    Originally, this was developed to allow a fast and easy way to purge 
+
+    Originally, this was developed to allow a fast and easy way to purge
     Facebook history from your account - it's especially useful when you have
-    past data that is visible to people that you don't want/need it to be 
+    past data that is visible to people that you don't want/need it to be
     visible to (such as all friends except those within a group.)  Though
-    it could be argued that it's also easy to modify this script to simply 
+    it could be argued that it's also easy to modify this script to simply
     change the permissions on all past posts recursively.
     '''
-    
+
     parser = OptionParser(description=dedent(description).strip())
     parser.add_option("-s", "--min-date", dest="min_date",
                       help="The earliest at which to start deleting items (start date)",
@@ -420,7 +420,7 @@ if __name__ == '__main__':
 
     (options, args) = parser.parse_args()
     required_arguments=['max_date','username',]
-    
+
     for arg in required_arguments:
         missing_args=[]
         if getattr(options, arg, None) is None:
@@ -431,37 +431,37 @@ if __name__ == '__main__':
         print "Missing argument(s) for {0}".format(', '.join(missing_args))
         parser.print_help()
         exit(0)
-    
+
     for f in ['max_date', 'min_date']:
         if getattr(options, f):
             setattr(options, f, dparser.parse(getattr(options,f )).replace(tzinfo=tzlocal.get_localzone()))
-    if max(options.clean_posts, options.clean_photos):       
+    if max(options.clean_posts, options.clean_photos):
         fbc=FacebookCleaner(#token=options.token,
                             username=options.username, password=options.password)
     print dedent('''
         Sometimes the browser page fails to load, and things get stuck!
-        
+
         To fix this, there are a couple things you can do:
-            1.  After the FF window opens, make it narrower - so 
+            1.  After the FF window opens, make it narrower - so
                 that the ads and messenger are not visible in your browser window.
             2.  If you notice it being "stuck" (i.e. the page is loading for a long time) press the
                 browser's "stop" button, then wait a few seconds and things should continue
                 normally.
-                
+
         Sorry, but unfortunately Selenium doesn't have a component that lets the script hit "stop",
         so it's a manual thing.
-        
-        Note: If you close the browser window, things will likely stop working.  
+
+        Note: If you close the browser window, things will likely stop working.
               Leave it open and watch the magic!
-    
-        DANGER DANGER DANGER DANGER DANGER DANGER DANGER DANGER DANGER DANGER 
-        
+
+        DANGER DANGER DANGER DANGER DANGER DANGER DANGER DANGER DANGER DANGER
+
         YOUR FACEBOOK DATA COULD BE DELETED - PRESS CONTROL-C TO ABORT THIS
         PROCESS NOW, IF YOU DON'T WANT THAT TO HAPPEN!!!!
-        
-        DANGER DANGER DANGER DANGER DANGER DANGER DANGER DANGER DANGER DANGER 
+
+        DANGER DANGER DANGER DANGER DANGER DANGER DANGER DANGER DANGER DANGER
     ''')
-    
+
     answer=raw_input('This tool could remove portions of, or all of, your facebook account - are you sure you wish to continue (yes/N)? ')
     if answer.lower().strip() != 'yes':
         print "Please enter 'yes' to run this!"
@@ -472,4 +472,3 @@ if __name__ == '__main__':
     if options.clean_photos:
         fbc.clean_photos(max_date=options.max_date,
                          min_date=options.min_date)
-    
