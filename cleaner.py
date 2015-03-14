@@ -422,12 +422,20 @@ if __name__ == '__main__':
         missing_args=[]
         if getattr(options, arg, None) is None:
             missing_args.append(arg)
-    while not options.password:
-        options.password=getpass.getpass('Enter password for {0}: '.format(options.username))
     if missing_args:
         print "Missing argument(s) for {0}".format(', '.join(missing_args))
         parser.print_help()
         exit(0)
+
+    if not (getattr(options, 'clean_posts', None) or
+            getattr(options, 'clean_photos', None)):
+        print "Must specify at least one action (--photos or --posts)!"
+        parser.print_help()
+        exit(0)
+
+    while not options.password:
+        options.password=getpass.getpass('Enter password for {0}: '.format(options.username))
+
 
     for f in ['max_date', 'min_date']:
         if getattr(options, f):
