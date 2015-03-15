@@ -75,6 +75,7 @@ class FacebookCleaner(object):
             try:
                 self.profile = self._graph.get_object('me')
                 self.id=self.profile['id']
+                self.name=self.profile['name']
             except facebook.GraphAPIError, e:
                 print >>sys.stderr, "Failure to access Graph API with token - error: {0}".format(e)
                 print >>sys.stderr, "Perhaps you need to get a new one here: https://developers.facebook.com/tools/explorer/"
@@ -139,28 +140,43 @@ class FacebookCleaner(object):
     def perform_click(driver, elem):
         hover = ActionChains(driver).move_to_element(elem).click()
         hover.perform()
+        
+    @staticmethod
+    def perform_hover(driver, elem):
+        hover = ActionChains(driver).move_to_element(elem)
+        hover.perform()
 
-    def perform_xpaths(self, url, xpaths, action_f=None):
+    def perform_xpaths(self, url, xpaths, additional_actions=None):
         '''
         Perform a set of xpath queries, in this case the 
         value returned is either a boolean (False) indicating
         that the process failed for some reason, or a list of values, with
-        the list normally containing nothing useful, unless an action_f
-        callable is passed in.  The action_f callable is called in lieu
-        of the basic "click on this thing" mechanism and might return something
-        useful (the current usage is to just get data from a focused element,
-        rather than click on it.)
+        the list normally containing nothing useful.
+        
+        Default actions are: click (click on something) and hover (hover on something)
+        if additional_actions is passed in (a dictionary) the default actions
+        get augmented by the new ones.
         '''
         results = []
+        actions={'click': self.perform_click,
+                 'hover': self.perform_hover}
+        if isinstance(additional_actions, (dict,)):
+            actions.update(additional_actions)
         if url:
             self.load_page(url)
-        for xpath, required in xpaths:
+        for xpath_components in xpaths:
+            if len(xpath_components) == 2:
+                xpath, required=xpath_components
+                action='click'
+            elif len(xpath_components) == 3:
+                xpath, required, action = xpath_components
+            else:
+                raise Exception('Invalid arguments to perform_xpaths {0}'.format(xpath_components))
             elem=self.driver.find_elements_by_xpath(xpath)
             if elem:
                 elem=elem[0]
                 if self.is_visible(elem):
-                    action_f = action_f or self.perform_click
-                    results.append(action_f(self.driver, elem))
+                    results.append(actions[action](self.driver, elem))
             elif required:
                 print "Failed xpath lookup ({0}) for URL {1} (aborting)".format(xpath, url)
                 return False
@@ -189,6 +205,16 @@ class FacebookCleaner(object):
                 ("//button[contains(text(), 'Confirm')]", True,),]
         return self.perform_xpaths(url, xpaths)
 
+
+    def unlike_page(self, url):
+        '''
+        A simple function to use the Firefox UI to unlike a page that 
+        had been liked.  This has the side effect of unfollowing as well.
+        '''
+        xpaths=[("//button[contains(@class,'PageLikedButton')]",False,'hover'),
+                ("//*[contains(text(), 'Unlike')]", True,),]
+        return self.perform_xpaths(url, xpaths)
+
     def delete_album(self, url):
         '''
         A simple function to use the Firefox UI to remove an album.
@@ -198,7 +224,16 @@ class FacebookCleaner(object):
                 ("//button[contains(text(), 'Delete Album')]", True,),]
         return self.perform_xpaths(url, xpaths)
 
-    def photo_generator(self, max_date, min_date):
+    def untag_photo(self, url):
+        '''
+        A simple function to use the Firefox UI to remove an album.  Hover
+        over the username and the click remove tag to remove the tag.
+        '''
+        xpaths=[("//a[contains(@class,'taggee') and contains(text(), '{0}')]".format(self.name), True,'hover'),
+                ("//a[contains(text(), 'Remove Tag')]",True,),]
+        return self.perform_xpaths(url, xpaths)
+
+    def photo_generator(self, max_date, min_date, delete_albums=False):
         '''
         A generator that iterates over all the photos and albums to return them
         all.  The albums (if any) are deleted as it goes along, unless it finds
@@ -218,15 +253,15 @@ class FacebookCleaner(object):
                 break
             albums=requests.get(albums['paging']['next']).json()
 
-        delete_albums=0
+        deleted_albums=0
         for album in album_list:
             album["updated_time"] = dparser.parse(album["updated_time"])
             if (album['updated_time'] < max_date and
                 (not min_date or album['updated_time'] > min_date)):
 
-                if self.delete_album(album['link']): # skip the photos if we deleted the album
+                if delete_albums and self.delete_album(album['link']): # skip the photos if we deleted the album
                     continue
-                delete_albums+=1
+                deleted_albums+=1
             pictures=self.graphLookup(album['id'],"photos")
             while True:
                 for picture in pictures['data']:
@@ -235,7 +270,8 @@ class FacebookCleaner(object):
                     break
                 pictures=requests.get(pictures['paging']['next']).json()
 
-        print "There were {0} album(s) with photos to be removed".format(delete_albums)
+        if delete_albums:
+            print "There were {0} album(s) with photos to be removed".format(deleted_albums)
         pictures = self.graphLookup("me", "photos")
         while True:
             for picture in pictures['data']:
@@ -243,6 +279,58 @@ class FacebookCleaner(object):
             if not (pictures.has_key('paging') and pictures['paging'].has_key('next')):
                 break
             pictures=requests.get(pictures['paging']['next']).json()
+
+    def page_likes_generator(self, max_date, min_date):
+        '''
+        A generator that iterates over all the page likes to return those pages
+        that were liked.
+        '''
+        likes = self.graphLookup("me", "likes")
+        page_likes=[]
+        while True:
+            for page_like in likes['data']:
+                yield page_like
+            if not (likes.has_key('paging') and likes['paging'].has_key('next')):
+                break
+            likes=requests.get(page_likes['paging']['next']).json()
+
+    def clean_page_likes(self, max_date, min_date=None):
+        '''
+        Use the page_likes generator to get all the pages a user has liked,
+        and then unlike them (based on the date range selected.)
+        '''
+        page_likes=[]
+        for page_like in self.page_likes_generator(max_date, min_date):
+            page_like["created_time"] = dparser.parse(page_like["created_time"])
+            if (page_like['created_time'] < max_date and
+                (not min_date or page_like['created_time'] > min_date)):
+                page_likes.append(page_like)
+                if (len(page_likes) % 10) == 0:
+                    sys.stdout.write('L')
+                    sys.stdout.flush()
+        print "\nThere are {0} page's to be unliked".format(len(page_likes))
+        for page_like in page_likes:
+            url='https://facebook.com/{0}'.format(page_like['id'])
+            self.unlike_page(url)
+            
+    def clean_tagged_photos(self, max_date, min_date=None):
+        '''
+        Use the photos generator to clean all photos that a user has been
+        tagged in, including those that the user might own him/herself
+        '''
+        tagged_photos=[]
+        for tagged_photo in self.photo_generator(max_date, min_date, delete_albums=False):
+            tagged_photo["created_time"] = dparser.parse(tagged_photo["created_time"])
+            if 'tags' in tagged_photo and 'data' in tagged_photo['tags']:
+                for elem in tagged_photo['tags']['data']:
+                    if elem.get('id',0) == self.id:
+                        tagged_photos.append(tagged_photo)
+                if (len(tagged_photos) % 10) == 0:
+                    sys.stdout.write('T')
+                    sys.stdout.flush()
+        print "\nThere are {0} photos's to be untagged".format(len(tagged_photos))
+        for tagged_photo in tagged_photos:
+            self.untag_photo(tagged_photo['link'])
 
     def clean_photos(self, max_date, min_date=None):
         '''
@@ -253,10 +341,9 @@ class FacebookCleaner(object):
         album deletes all the photos inside it (as opposed to having to
         delete each one.)
         '''
-        photo_feed = self.graphLookup("me", "photos") # requires read_stream
         pictures=[]
         picture_types=set()
-        for picture in self.photo_generator(max_date, min_date):
+        for picture in self.photo_generator(max_date, min_date, delete_albums=True):
             picture["created_time"] = dparser.parse(picture["created_time"])
             if (picture['created_time'] < max_date and
                 (not min_date or picture['created_time'] > min_date)):
@@ -288,6 +375,7 @@ class FacebookCleaner(object):
                 ("//input[@name='user_interests']",False,),
                 ("//input[@name='user_friends']",False,),
                 ("//input[@name='user_events']",False,),
+                ("//input[@name='user_likes']",False,),
                 ("//*[@data-group='extended']",True,),
                 ("//input[@name='read_stream']",False,),
                 ("//button[contains(text(), 'Get Access Token')]", True,)
@@ -316,9 +404,10 @@ class FacebookCleaner(object):
         is different than the users login name.)  If the user does not
         have a facebook userid, this might not work as expected ?
         '''
-        xpaths=[("//a[@class='fbxWelcomeBoxName']", True)]
+        additional_actions={'copy': lambda driver, elem: elem.get_attribute("href")}
+        xpaths=[("//a[@class='fbxWelcomeBoxName']", True, 'copy')]
         pretty_user_id = self.perform_xpaths("https://www.facebook.com", xpaths,
-                                             lambda driver, elem: elem.get_attribute("href"))
+                                             additional_actions)
         if pretty_user_id:
             return pretty_user_id[0].split("/")[3]
 
@@ -437,11 +526,18 @@ if __name__ == '__main__':
                       action='store_true',
                       dest="clean_photos", default=False,
                       help="Remove Photos")
+    parser.add_option("--untag-photos",
+                      action='store_true',
+                      dest="clean_tagged_photos", default=False,
+                      help="Untag Photos that a user is tagged in")
     parser.add_option("--posts",
                       action='store_true',
                       dest="clean_posts", default=False,
                       help="Remove Posts")
-
+    parser.add_option("--page-likes",
+                      action='store_true',
+                      dest="clean_page_likes", default=False,
+                      help="Unlike any liked pages")
     (options, args) = parser.parse_args()
     required_arguments=['max_date','username',]
 
@@ -454,9 +550,9 @@ if __name__ == '__main__':
         parser.print_help()
         exit(0)
 
-    if not (getattr(options, 'clean_posts', None) or
-            getattr(options, 'clean_photos', None)):
-        print "Must specify at least one action (--photos or --posts)!"
+    if not max(options.clean_posts, options.clean_photos, options.clean_page_likes,
+               options.clean_tagged_photos):
+        print "Must specify at least one action (--photos, --posts, --untag-photos, --page-likes)!"
         parser.print_help()
         exit(0)
 
@@ -467,8 +563,7 @@ if __name__ == '__main__':
     for f in ['max_date', 'min_date']:
         if getattr(options, f):
             setattr(options, f, dparser.parse(getattr(options,f )).replace(tzinfo=tzlocal.get_localzone()))
-    if max(options.clean_posts, options.clean_photos):
-        fbc=FacebookCleaner(username=options.username, password=options.password)
+    fbc=FacebookCleaner(username=options.username, password=options.password)
     print dedent('''
         Sometimes the browser page fails to load, and things get stuck!
 
@@ -505,3 +600,9 @@ if __name__ == '__main__':
     if options.clean_photos:
         fbc.clean_photos(max_date=options.max_date,
                          min_date=options.min_date)
+    if options.clean_tagged_photos:
+        fbc.clean_tagged_photos(max_date=options.max_date,
+                                min_date=options.min_date)
+    if options.clean_page_likes:
+        fbc.clean_page_likes(max_date=options.max_date,
+                             min_date=options.min_date)
