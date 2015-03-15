@@ -409,19 +409,17 @@ class FacebookCleaner(object):
         self.delay=delay
         return token
 
-    def get_pretty_user_id(self):
+    def get_user_id(self):
         '''
-        Get the user_id of the facebook user - note that it's unclear
-        if this works for a user without a set userid for facebook (this
-        is different than the users login name.)  If the user does not
-        have a facebook userid, this might not work as expected ?
+        Get the user_id of the Facebook user, the pretty one the user selected
+        if it exists, otherwise the numerical ID.
         '''
         additional_actions={'copy': lambda driver, elem: elem.get_attribute("href")}
         xpaths=[("//a[@class='fbxWelcomeBoxName']", True, 'copy')]
-        pretty_user_id = self.perform_xpaths("https://www.facebook.com", xpaths,
-                                             additional_actions)
-        if pretty_user_id:
-            return pretty_user_id[0].split("/")[3]
+        user_id = self.perform_xpaths("https://www.facebook.com", xpaths,
+                                      additional_actions)
+        if user_id:
+            return user_id[0].split("/")[3]
 
     def clean_posts(self, max_date, min_date=None):
         '''
@@ -461,7 +459,7 @@ class FacebookCleaner(object):
 
         print "\nFound {0} posts to be deleted".format(len(posts))
 
-        pretty_user_id = self.get_pretty_user_id()
+        user_id = self.get_user_id()
 
         for post in posts:
             if 'link' not in post.get('actions',[{}])[0]:
@@ -470,8 +468,8 @@ class FacebookCleaner(object):
 
             # Some users have "pretty" user IDs and Facebook seems to prefer their
             # use to numerical user IDs in post URLs
-            if pretty_user_id:
-                url = re.sub(r"/([0-9]+)/posts", "/%s/posts" % pretty_user_id, url)
+            if user_id:
+                url = re.sub(r"/([0-9]+)/posts", "/%s/posts" % user_id, url)
 
             if post['type'] in ('link', 'status', 'photo', 'video'):
                 self.delete_status(url)
