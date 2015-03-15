@@ -230,7 +230,8 @@ class FacebookCleaner(object):
         over the username and the click remove tag to remove the tag.
         '''
         xpaths=[("//a[contains(@class,'taggee') and contains(text(), '{0}')]".format(self.name), True,'hover'),
-                ("//a[contains(text(), 'Remove Tag')]",True,),]
+                ("//a[contains(text(), 'Remove Tag')]",True,),
+                ("//button[contains(text(), 'Okay')]", False,),]
         return self.perform_xpaths(url, xpaths)
 
     def photo_generator(self, max_date, min_date, delete_albums=False):
@@ -240,38 +241,38 @@ class FacebookCleaner(object):
         that the update timestamp makes it ineligible for deletion - in which
         case it just recurses through the photos therein
         '''
-        albums = self.graphLookup("me", "albums")
-        album_list=[]
-        # Get a list of albums.  We make the list because sometimes we'll
-        # delete entire albums as we go along, which might mess up the API results.
-        while True:
-            for album in albums['data']:
-                if album['from']['id'] != self.id:
-                    continue
-                album_list.append(album)
-            if not (albums.has_key('paging') and albums['paging'].has_key('next')):
-                break
-            albums=requests.get(albums['paging']['next']).json()
-
-        deleted_albums=0
-        for album in album_list:
-            album["updated_time"] = dparser.parse(album["updated_time"])
-            if (album['updated_time'] < max_date and
-                (not min_date or album['updated_time'] > min_date)):
-
-                if delete_albums and self.delete_album(album['link']): # skip the photos if we deleted the album
-                    continue
-                deleted_albums+=1
-            pictures=self.graphLookup(album['id'],"photos")
-            while True:
-                for picture in pictures['data']:
-                    yield picture
-                if not (pictures.has_key('paging') and pictures['paging'].has_key('next')):
-                    break
-                pictures=requests.get(pictures['paging']['next']).json()
-
         if delete_albums:
-            print "There were {0} album(s) with photos to be removed".format(deleted_albums)
+            albums = self.graphLookup("me", "albums")
+            album_list=[]
+            # Get a list of albums.  We make the list because sometimes we'll
+            # delete entire albums as we go along, which might mess up the API results.
+            while True:
+                for album in albums['data']:
+                    if album['from']['id'] != self.id:
+                        continue
+                    album_list.append(album)
+                if not (albums.has_key('paging') and albums['paging'].has_key('next')):
+                    break
+                albums=requests.get(albums['paging']['next']).json()
+    
+            deleted_albums=0
+            for album in album_list:
+                album["updated_time"] = dparser.parse(album["updated_time"])
+                if (album['updated_time'] < max_date and
+                    (not min_date or album['updated_time'] > min_date)):
+    
+                    if delete_albums and self.delete_album(album['link']): # skip the photos if we deleted the album
+                        continue
+                    deleted_albums+=1
+                pictures=self.graphLookup(album['id'],"photos")
+                while True:
+                    for picture in pictures['data']:
+                        yield picture
+                    if not (pictures.has_key('paging') and pictures['paging'].has_key('next')):
+                        break
+                    pictures=requests.get(pictures['paging']['next']).json()
+    
+                print "There were {0} album(s) with photos to be removed".format(deleted_albums)
         pictures = self.graphLookup("me", "photos")
         while True:
             for picture in pictures['data']:
@@ -321,13 +322,17 @@ class FacebookCleaner(object):
         tagged_photos=[]
         for tagged_photo in self.photo_generator(max_date, min_date, delete_albums=False):
             tagged_photo["created_time"] = dparser.parse(tagged_photo["created_time"])
-            if 'tags' in tagged_photo and 'data' in tagged_photo['tags']:
+            if tagged_photo['from']['id'] != self.id: # Someone else's photo
+                tagged_photos.append(tagged_photo)
+            # Our photo where we are tagged in it..
+            elif 'tags' in tagged_photo and 'data' in tagged_photo['tags']:
                 for elem in tagged_photo['tags']['data']:
-                    if elem.get('id',0) == self.id:
+                    if elem['from']['id'] == self.id:
                         tagged_photos.append(tagged_photo)
-                if (len(tagged_photos) % 10) == 0:
-                    sys.stdout.write('T')
-                    sys.stdout.flush()
+                        break
+            if (len(tagged_photos) % 10) == 0:
+                sys.stdout.write('T')
+                sys.stdout.flush()
         print "\nThere are {0} photos's to be untagged".format(len(tagged_photos))
         for tagged_photo in tagged_photos:
             self.untag_photo(tagged_photo['link'])
