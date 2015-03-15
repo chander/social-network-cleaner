@@ -142,7 +142,14 @@ class FacebookCleaner(object):
 
     def perform_xpaths(self, url, xpaths, action_f=None):
         '''
-        Perform a set of xpath queries
+        Perform a set of xpath queries, in this case the 
+        value returned is either a boolean (False) indicating
+        that the process failed for some reason, or a list of values, with
+        the list normally containing nothing useful, unless an action_f
+        callable is passed in.  The action_f callable is called in lieu
+        of the basic "click on this thing" mechanism and might return something
+        useful (the current usage is to just get data from a focused element,
+        rather than click on it.)
         '''
         results = []
         if url:
@@ -303,6 +310,12 @@ class FacebookCleaner(object):
         return token
 
     def get_pretty_user_id(self):
+        '''
+        Get the user_id of the facebook user - note that it's unclear 
+        if this works for a user without a set userid for facebook (this
+        is different than the users login name.)  If the user does not
+        have a facebook userid, this might not work as expected ?
+        '''
         xpaths=[("//a[@class='fbxWelcomeBoxName']", True)]
         pretty_user_id = self.perform_xpaths("https://www.facebook.com", xpaths,
                                              lambda driver, elem: elem.get_attribute("href"))
