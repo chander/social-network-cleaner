@@ -230,7 +230,7 @@ class FacebookCleaner(object):
         over the username and the click remove tag to remove the tag.
         '''
         xpaths=[("//a[contains(@class,'taggee') and contains(text(), '{0}')]".format(self.name), True,'hover'),
-                ("//a[contains(text(), 'Remove Tag')]",True,),
+                ("//a[contains(text(), 'Remove tag')]",True,),
                 ("//button[contains(text(), 'Okay')]", False,),]
         return self.perform_xpaths(url, xpaths)
 
