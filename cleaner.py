@@ -202,7 +202,7 @@ class FacebookCleaner(object):
         A simple function to use the Firefox UI to remove a photo.
         '''
         xpaths=[("//*[contains(text(), 'Delete This Photo')]",False,),
-                ("//button[contains(text(), 'Confirm')]", True,), 'hover']
+                ("//button[contains(text(), 'Confirm')]", True,),]
         return self.perform_xpaths(url, xpaths)
 
 
@@ -221,7 +221,7 @@ class FacebookCleaner(object):
         '''
         xpaths=[("//a[contains(@class,'fbPhotoAlbumOptionsGear')]", True),
                 ("//*[contains(text(), 'Delete Album')]",False,),
-                ("//button[contains(text(), 'Delete Album')]", True,'hover'),]
+                ("//button[contains(text(), 'Delete Album')]", True),]
         return self.perform_xpaths(url, xpaths)
 
     def untag_photo(self, url):
