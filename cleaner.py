@@ -201,8 +201,8 @@ class FacebookCleaner(object):
         '''
         A simple function to use the Firefox UI to remove a photo.
         '''
-        xpaths=[("//*[contains(text(), 'Delete This Photo')]",False,),
-                ("//button[contains(text(), 'Confirm')]", True,),]
+        xpaths=[("//*[contains(text(), 'Delete this photo')]",False,),
+                ("//button[contains(@class, 'Confirm')]", True,),]
         return self.perform_xpaths(url, xpaths)
 
 
@@ -221,7 +221,7 @@ class FacebookCleaner(object):
         '''
         xpaths=[("//a[contains(@class,'fbPhotoAlbumOptionsGear')]", True),
                 ("//*[contains(text(), 'Delete Album')]",False,),
-                ("//button[contains(text(), 'Delete Album')]", True),]
+                ("//button[contains(@class, 'Confirm')]", True),]
         return self.perform_xpaths(url, xpaths)
 
     def untag_photo(self, url):
@@ -281,7 +281,6 @@ class FacebookCleaner(object):
         pictures = self.graphLookup("me", "photos")
         while True:
             for picture in pictures['data']:
-                print p
                 yield picture
             if not (pictures.has_key('paging') and pictures['paging'].has_key('next')):
                 break
@@ -327,7 +326,7 @@ class FacebookCleaner(object):
         tagged in, including those that the user might own him/herself
         '''
         tagged_photos=[]
-        for tagged_photo in self.photo_generator(max_date, min_date, delete_albums=False):
+        for tagged_photo in self.photo_generator(max_date, min_date):
             tagged_photo["created_time"] = dparser.parse(tagged_photo["created_time"])
             if tagged_photo['from']['id'] != self.id: # Someone else's photo
                 tagged_photos.append(tagged_photo)
