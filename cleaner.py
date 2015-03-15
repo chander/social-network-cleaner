@@ -40,6 +40,7 @@ import pprint
 import time
 import traceback
 from threading import Timer
+import re
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
@@ -91,6 +92,7 @@ class FacebookCleaner(object):
             try:
                 if not getattr(self, '_driver', None):
                     self._driver = webdriver.Firefox()
+                    self._driver.set_window_size(800, 600)
                 # or you can use Chrome(executable_path="/usr/bin/chromedriver")
                 self._driver.set_page_load_timeout(10)
                 self._driver.get("https://www.facebook.com")
@@ -133,10 +135,16 @@ class FacebookCleaner(object):
         except TimeoutException:
             return False
 
-    def perform_xpaths(self, url, xpaths):
+    @staticmethod
+    def perform_click(driver, elem):
+        hover = ActionChains(driver).move_to_element(elem).click()
+        hover.perform()
+
+    def perform_xpaths(self, url, xpaths, action_f=None):
         '''
         Perform a set of xpath queries
         '''
+        results = []
         if url:
             self.load_page(url)
         for xpath, required in xpaths:
@@ -144,8 +152,8 @@ class FacebookCleaner(object):
             if elem:
                 elem=elem[0]
                 if self.is_visible(elem):
-                    hover = ActionChains(self.driver).move_to_element(elem).click()
-                    hover.perform()
+                    action_f = action_f or self.perform_click
+                    results.append(action_f(self.driver, elem))
             elif required:
                 print "Failed xpath lookup ({0}) for URL {1} (aborting)".format(xpath, url)
                 return False
@@ -154,7 +162,7 @@ class FacebookCleaner(object):
         if (self.deleted % 10) == 0:
             sys.stdout.write('*')
             sys.stdout.flush()
-        return True
+        return results
 
     def delete_status(self, url):
         '''
@@ -294,6 +302,13 @@ class FacebookCleaner(object):
         self.delay=delay
         return token
 
+    def get_pretty_user_id(self):
+        xpaths=[("//a[@class='fbxWelcomeBoxName']", True)]
+        pretty_user_id = self.perform_xpaths("https://www.facebook.com", xpaths,
+                                             lambda driver, elem: elem.get_attribute("href"))
+        if pretty_user_id:
+            return pretty_user_id[0].split("/")[3]
+
     def clean_posts(self, max_date, min_date=None):
         '''
         Iterate over the posts for an account and delete them if possible,
@@ -332,10 +347,18 @@ class FacebookCleaner(object):
 
         print "\nFound {0} posts to be deleted".format(len(posts))
 
+        pretty_user_id = self.get_pretty_user_id()
+
         for post in posts:
             if 'link' not in post.get('actions',[{}])[0]:
                 continue
             url=post['actions'][0]['link']
+
+            # Some users have "pretty" user IDs and Facebook seems to prefer their
+            # use to numerical user IDs in post URLs
+            if pretty_user_id:
+                url = re.sub(r"/([0-9]+)/posts", "/%s/posts" % pretty_user_id, url)
+
             if post['type'] in ('link', 'status', 'photo', 'video'):
                 self.delete_status(url)
             time.sleep(5)
