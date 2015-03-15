@@ -140,7 +140,7 @@ class FacebookCleaner(object):
     def perform_click(driver, elem):
         hover = ActionChains(driver).move_to_element(elem).click()
         hover.perform()
-        
+
     @staticmethod
     def perform_hover(driver, elem):
         hover = ActionChains(driver).move_to_element(elem)
@@ -148,11 +148,11 @@ class FacebookCleaner(object):
 
     def perform_xpaths(self, url, xpaths, additional_actions=None):
         '''
-        Perform a set of xpath queries, in this case the 
+        Perform a set of xpath queries, in this case the
         value returned is either a boolean (False) indicating
         that the process failed for some reason, or a list of values, with
         the list normally containing nothing useful.
-        
+
         Default actions are: click (click on something) and hover (hover on something)
         if additional_actions is passed in (a dictionary) the default actions
         get augmented by the new ones.
@@ -208,7 +208,7 @@ class FacebookCleaner(object):
 
     def unlike_page(self, url):
         '''
-        A simple function to use the Firefox UI to unlike a page that 
+        A simple function to use the Firefox UI to unlike a page that
         had been liked.  This has the side effect of unfollowing as well.
         '''
         xpaths=[("//button[contains(@class,'PageLikedButton')]",False,'hover'),
@@ -233,7 +233,7 @@ class FacebookCleaner(object):
                 ("//a[contains(text(), 'Remove Tag')]",True,),
                 ("//button[contains(text(), 'Okay')]", False,),]
         return self.perform_xpaths(url, xpaths)
-    
+
     def album_generator(self):
         albums = self.graphLookup("me", "albums")
         album_list=[]
@@ -245,7 +245,7 @@ class FacebookCleaner(object):
             if not (albums.has_key('paging') and albums['paging'].has_key('next')):
                 break
             albums=requests.get(albums['paging']['next']).json()
-            
+
     def clean_albums(self, max_date, min_date):
         deleted_albums=0
         for album in self.album_generator():
@@ -256,7 +256,7 @@ class FacebookCleaner(object):
                 deleted_albums+=1
         print "There were {0} album(s) with photos removed".format(deleted_albums)
 
-            
+
     def photo_generator(self, max_date, min_date):
         '''
         A generator that iterates over all the photos and albums to return them
@@ -264,7 +264,7 @@ class FacebookCleaner(object):
         that the update timestamp makes it ineligible for deletion - in which
         case it just recurses through the photos therein
         '''
-        
+
         # It's questionable as to whether this is still needed - since there's
         # a separate set of methods for deleting albums, and the pictures
         # should all come back from photos/uploaded if there are any.
@@ -319,7 +319,7 @@ class FacebookCleaner(object):
         for page_like in page_likes:
             url='https://facebook.com/{0}'.format(page_like['id'])
             self.unlike_page(url)
-            
+
     def clean_tagged_photos(self, max_date, min_date=None):
         '''
         Use the photos generator to clean all photos that a user has been
@@ -411,7 +411,7 @@ class FacebookCleaner(object):
 
     def get_pretty_user_id(self):
         '''
-        Get the user_id of the facebook user - note that it's unclear 
+        Get the user_id of the facebook user - note that it's unclear
         if this works for a user without a set userid for facebook (this
         is different than the users login name.)  If the user does not
         have a facebook userid, this might not work as expected ?
