@@ -238,7 +238,7 @@ class FacebookCleaner(object):
         '''
         xpaths=[("//a[contains(@class,'taggee') and contains(text(), '{0}')]".format(self.name), True,'hover'),
                 ("//a[contains(lower-case(text()), 'remove tag')]",True,),
-                ("//button[contains(text(), 'Okay')]", False,),]
+                ("//button[contains(@class, 'Confirm')]", False,),]
         return self.perform_xpaths(url, xpaths)
 
     def album_generator(self):
