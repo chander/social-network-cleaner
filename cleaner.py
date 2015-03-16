@@ -172,6 +172,13 @@ class FacebookCleaner(object):
                 xpath, required, action = xpath_components
             else:
                 raise Exception('Invalid arguments to perform_xpaths {0}'.format(xpath_components))
+
+            # Transform lower-case into translate function as it is not included with
+            # xpath 1.0 (It's useful for performing case-insensitive matching.)
+            xpath = re.sub(r"lower-case\((.+?)\),",
+                           r"translate(\1, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'),",
+                           xpath)
+
             elem=self.driver.find_elements_by_xpath(xpath)
             if elem:
                 elem=elem[0]
@@ -230,7 +237,7 @@ class FacebookCleaner(object):
         over the username and the click remove tag to remove the tag.
         '''
         xpaths=[("//a[contains(@class,'taggee') and contains(text(), '{0}')]".format(self.name), True,'hover'),
-                ("//a[contains(text(), 'Remove tag')]",True,),
+                ("//a[contains(lower-case(text()), 'remove tag')]",True,),
                 ("//button[contains(text(), 'Okay')]", False,),]
         return self.perform_xpaths(url, xpaths)
 
