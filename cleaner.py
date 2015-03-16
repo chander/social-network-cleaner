@@ -140,7 +140,7 @@ class FacebookCleaner(object):
     def perform_click(driver, elem):
         hover = ActionChains(driver).move_to_element(elem).click()
         hover.perform()
-        
+
     @staticmethod
     def perform_hover(driver, elem):
         hover = ActionChains(driver).move_to_element(elem)
@@ -148,11 +148,11 @@ class FacebookCleaner(object):
 
     def perform_xpaths(self, url, xpaths, additional_actions=None):
         '''
-        Perform a set of xpath queries, in this case the 
+        Perform a set of xpath queries, in this case the
         value returned is either a boolean (False) indicating
         that the process failed for some reason, or a list of values, with
         the list normally containing nothing useful.
-        
+
         Default actions are: click (click on something) and hover (hover on something)
         if additional_actions is passed in (a dictionary) the default actions
         get augmented by the new ones.
@@ -201,14 +201,14 @@ class FacebookCleaner(object):
         '''
         A simple function to use the Firefox UI to remove a photo.
         '''
-        xpaths=[("//*[contains(text(), 'Delete This Photo')]",False,),
-                ("//button[contains(text(), 'Confirm')]", True,),]
+        xpaths=[("//*[contains(text(), 'Delete this photo')]",False,),
+                ("//button[contains(@class, 'Confirm')]", True,),]
         return self.perform_xpaths(url, xpaths)
 
 
     def unlike_page(self, url):
         '''
-        A simple function to use the Firefox UI to unlike a page that 
+        A simple function to use the Firefox UI to unlike a page that
         had been liked.  This has the side effect of unfollowing as well.
         '''
         xpaths=[("//button[contains(@class,'PageLikedButton')]",False,'hover'),
@@ -221,7 +221,7 @@ class FacebookCleaner(object):
         '''
         xpaths=[("//a[contains(@class,'fbPhotoAlbumOptionsGear')]", True),
                 ("//*[contains(text(), 'Delete Album')]",False,),
-                ("//button[contains(text(), 'Delete Album')]", True),]
+                ("//button[contains(@class, 'Confirm')]", True),]
         return self.perform_xpaths(url, xpaths)
 
     def untag_photo(self, url):
@@ -230,10 +230,10 @@ class FacebookCleaner(object):
         over the username and the click remove tag to remove the tag.
         '''
         xpaths=[("//a[contains(@class,'taggee') and contains(text(), '{0}')]".format(self.name), True,'hover'),
-                ("//a[contains(text(), 'Remove Tag')]",True,),
+                ("//a[contains(text(), 'Remove tag')]",True,),
                 ("//button[contains(text(), 'Okay')]", False,),]
         return self.perform_xpaths(url, xpaths)
-    
+
     def album_generator(self):
         albums = self.graphLookup("me", "albums")
         album_list=[]
@@ -245,7 +245,7 @@ class FacebookCleaner(object):
             if not (albums.has_key('paging') and albums['paging'].has_key('next')):
                 break
             albums=requests.get(albums['paging']['next']).json()
-            
+
     def clean_albums(self, max_date, min_date):
         deleted_albums=0
         for album in self.album_generator():
@@ -256,7 +256,7 @@ class FacebookCleaner(object):
                 deleted_albums+=1
         print "There were {0} album(s) with photos removed".format(deleted_albums)
 
-            
+
     def photo_generator(self, max_date, min_date):
         '''
         A generator that iterates over all the photos and albums to return them
@@ -264,7 +264,7 @@ class FacebookCleaner(object):
         that the update timestamp makes it ineligible for deletion - in which
         case it just recurses through the photos therein
         '''
-        
+
         # It's questionable as to whether this is still needed - since there's
         # a separate set of methods for deleting albums, and the pictures
         # should all come back from photos/uploaded if there are any.
@@ -281,7 +281,6 @@ class FacebookCleaner(object):
         pictures = self.graphLookup("me", "photos")
         while True:
             for picture in pictures['data']:
-                print p
                 yield picture
             if not (pictures.has_key('paging') and pictures['paging'].has_key('next')):
                 break
@@ -320,14 +319,14 @@ class FacebookCleaner(object):
         for page_like in page_likes:
             url='https://facebook.com/{0}'.format(page_like['id'])
             self.unlike_page(url)
-            
+
     def clean_tagged_photos(self, max_date, min_date=None):
         '''
         Use the photos generator to clean all photos that a user has been
         tagged in, including those that the user might own him/herself
         '''
         tagged_photos=[]
-        for tagged_photo in self.photo_generator(max_date, min_date, delete_albums=False):
+        for tagged_photo in self.photo_generator(max_date, min_date):
             tagged_photo["created_time"] = dparser.parse(tagged_photo["created_time"])
             if tagged_photo['from']['id'] != self.id: # Someone else's photo
                 tagged_photos.append(tagged_photo)
@@ -410,19 +409,17 @@ class FacebookCleaner(object):
         self.delay=delay
         return token
 
-    def get_pretty_user_id(self):
+    def get_user_id(self):
         '''
-        Get the user_id of the facebook user - note that it's unclear 
-        if this works for a user without a set userid for facebook (this
-        is different than the users login name.)  If the user does not
-        have a facebook userid, this might not work as expected ?
+        Get the user_id of the Facebook user, the pretty one the user selected
+        if it exists, otherwise the numerical ID.
         '''
         additional_actions={'copy': lambda driver, elem: elem.get_attribute("href")}
         xpaths=[("//a[@class='fbxWelcomeBoxName']", True, 'copy')]
-        pretty_user_id = self.perform_xpaths("https://www.facebook.com", xpaths,
-                                             additional_actions)
-        if pretty_user_id:
-            return pretty_user_id[0].split("/")[3]
+        user_id = self.perform_xpaths("https://www.facebook.com", xpaths,
+                                      additional_actions)
+        if user_id:
+            return user_id[0].split("/")[3]
 
     def clean_posts(self, max_date, min_date=None):
         '''
@@ -462,7 +459,7 @@ class FacebookCleaner(object):
 
         print "\nFound {0} posts to be deleted".format(len(posts))
 
-        pretty_user_id = self.get_pretty_user_id()
+        user_id = self.get_user_id()
 
         for post in posts:
             if 'link' not in post.get('actions',[{}])[0]:
@@ -471,8 +468,8 @@ class FacebookCleaner(object):
 
             # Some users have "pretty" user IDs and Facebook seems to prefer their
             # use to numerical user IDs in post URLs
-            if pretty_user_id:
-                url = re.sub(r"/([0-9]+)/posts", "/%s/posts" % pretty_user_id, url)
+            if user_id:
+                url = re.sub(r"/([0-9]+)/posts", "/%s/posts" % user_id, url)
 
             if post['type'] in ('link', 'status', 'photo', 'video'):
                 self.delete_status(url)
