@@ -33,6 +33,7 @@ from textwrap import dedent
 import facebook
 import getpass
 import dateutil.parser as dparser
+import datetime
 import tzlocal
 import requests
 import sys
@@ -40,6 +41,7 @@ import pprint
 import time
 import traceback
 from threading import Timer
+from collections import defaultdict
 import re
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
@@ -48,6 +50,8 @@ from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 import selenium.webdriver.support.expected_conditions as EC
 import selenium.webdriver.support.ui as ui
+from bs4 import BeautifulSoup 
+import pdb
 
 class FacebookCleaner(object):
     def __init__(self, username, password):
@@ -135,6 +139,33 @@ class FacebookCleaner(object):
             return True
         except TimeoutException:
             return False
+
+    def navigateActivityLog(self):
+        '''
+        A simple function to navigate to the activity log from the main page.
+        This goes to the activity log page, and then keeps scrolling down until
+        the entire activity log has been loaded.
+        '''
+        print "Loading the entire activity log in the browser - this can take awhile!"
+        url='https://www.facebook.com/'
+        xpaths=[("//*[contains(text(), 'Account Settings')]",True,),
+                ("//div[contains(text(), 'Activity Log')]", True,),]
+        result=self.perform_xpaths(url, xpaths)
+        # Keep scrolling to the bottom until there's nothing left...
+        current_height=False
+        height=True
+        while height != current_height:
+            current_height=self.driver.execute_script('return document.body.scrollHeight;')
+            self._driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            for i in range(30):
+                height=self.driver.execute_script('return document.body.scrollHeight;')
+                if height != current_height:
+                    break
+                time.sleep(.5)
+            time.sleep(2);
+            height=self.driver.execute_script('return document.body.scrollHeight;')
+        return result
+    
 
     @staticmethod
     def perform_click(driver, elem):
@@ -301,6 +332,141 @@ class FacebookCleaner(object):
             if not (likes.has_key('paging') and likes['paging'].has_key('next')):
                 break
             likes=requests.get(page_likes['paging']['next']).json()
+
+
+    def purgeActivity(self, max_date, min_date):
+        '''
+        Go through the activity log and remove things...
+        '''
+        for item_date, items in self.getOrderedActivity():
+            if (item_date < max_date and
+                (not min_date or item_date > min_date)):
+                continue
+            for item_type, item in items:
+                print "Item type is {0}".format(item_type)
+                self.purgeElement(item)
+                
+                
+    def purgeElement(self, item):
+        '''
+        Locate an edit button of an item, click it, and then perform
+        the appropriate purge action.
+        '''
+        item_bs=BeautifulSoup(item.get_attribute('innerHTML'))
+        
+        # Locate all the id tags in the parents.
+        parents=[i.get('id') for i in item_bs.find_all(lambda tag: tag.has_attr('id'))]
+        # Build an Xpath query to locate any item with an ownerid that's in the parent..
+        xpath_string=' | '.join("//*[contains(@data-ownerid, '{0}')]".format(parent_id) 
+                                for parent_id in parents)
+        try:
+            edit=item.find_elements_by_xpath(".//a[contains(@role,'button')]")[-1]
+        except:
+            return
+        self.perform_click(self.driver, edit)
+        elements=self.driver.find_elements_by_xpath(xpath_string)
+        for elem in elements:
+            elem2=None
+            bs=BeautifulSoup(elem.get_attribute('innerHTML'))
+            if 'delete' in bs.text.lower():
+                elem2=elem.find_elements_by_xpath(".//span[contains(text(), 'Delete')]")
+            if not elem2 and 'unlike' in bs.text.lower():
+                elem2=elem.find_elements_by_xpath(".//span[contains(text(), 'Unlike')]")
+            if not elem2 and 'hidden from timeline' in bs.text.lower():
+                elem2=elem.find_elements_by_xpath(".//span[contains(text(), 'Hidden from Timeline')]")
+            if elem2:
+                self.perform_click(self.driver, elem2[0])  
+                xpaths=[("//span[contains(text(), 'Delete')]",False,),
+                        ("//button[contains(text(), 'Delete Post')]", False,),
+                        ("//button[contains(text(), 'Confirm')]", False,),]
+                result=self.perform_xpaths(None, xpaths)
+            
+        
+
+    def getOrderedActivity(self):
+        self.navigateActivityLog()
+        bborders=self.driver.find_elements_by_xpath("//*[contains(@class,'bottomborder')] | //div[contains(@class, '_iqq')]")
+        bborders.reverse()
+        bborders_copy=bborders[:]
+        item_dates=defaultdict(list)
+        id_list=[]
+        months=[datetime.date(2015, i, 1).strftime('%B').lower() for i in range(1,13)]
+        year_re=re.compile('({0})\s+(\d{{4}})'.format('|'.join(months),),
+                           flags=re.IGNORECASE)
+        
+        this_year=datetime.datetime.now().date().strftime('%Y')
+        # Get tody and yesterday.
+        today=datetime.datetime.now().date().strftime('%B %d')
+        yesterday=(datetime.datetime.now()-datetime.timedelta(days=1)).strftime('%B %d')
+        all_items=[]
+        for pos, item in enumerate(bborders):
+            innerdata=item.get_attribute('innerHTML')
+            soup = BeautifulSoup(innerdata)
+            skip=False
+            for m in months:
+                if innerdata.lower().startswith(m):
+                    print "Got Date {0}".format(innerdata)
+                    if innerdata.lower() == 'today':
+                        innerdata=today
+                    if innerdata.lower() == 'yesterday':
+                        innerdata=yesterday
+                    if id_list:
+                        # innerdata is a month and day
+                        item_dates[innerdata].extend(id_list)
+                    id_list=[]
+                    skip=True
+                    break
+            if skip:
+                continue
+            year_match=year_re.match(soup.text)
+            # We found  year, so save that set of stuff.
+            if year_match:
+                print "{0}: Got Year {1}".format(pos, 
+                                                 year_match.group(2))
+                if item_dates:
+                    for mon_day, day_items in item_dates.iteritems(): 
+                        item_date=dparser.parse('{0}, {1}'.format(mon_day, year_match.group(2))).replace(tzinfo=tzlocal.get_localzone())
+#                         all_items.append((item_date, day_items,))
+                        # Now yield this set of stuff as a set of objects that includes
+                        # the actual date of the post
+                        yield item_date, day_items
+                item_dates=defaultdict(list)
+                if len(id_list) != 0:
+                    print "WTF! Id_list contains %s" % (id_list,)
+                    id_list=[]
+                continue
+            else:
+                if soup.text.startswith('You commented on'):
+                    act_type='comment'
+                elif soup.text.startswith('You were mentioned'):
+                    act_type='mentioned'
+                elif 'wrote on yourtimeline' in soup.text:
+                    act_type='wrote_on_me'
+                elif 'wrote on' in soup.text:
+                    act_type='wrote_on'
+                elif 'shared alink' in soup.text:
+                    act_type='shared_link'
+                elif 'tagged in' in soup.text:
+                    act_type='tagged_in'
+                elif 'tagged at' in soup.text:
+                    act_type='tagged_at'
+                elif 'became friends' in soup.text:
+                    act_type='friend'
+                elif 'Happy Birthday' in soup.text:
+                    act_type='birthday'
+                elif 'friend request' in soup.text:
+                    act_type='friend_request'
+                elif soup.text.startswith('You like'):
+                    act_type='like'
+                else:
+                    act_type='unknown'
+                    print 'UNKNOWN: {0}'.format(soup.text)
+                id_list.append((act_type, item,))
+        
+        return
+
+                
+            
 
     def clean_page_likes(self, max_date, min_date=None):
         '''
@@ -547,6 +713,10 @@ if __name__ == '__main__':
                       action='store_true',
                       dest="clean_posts", default=False,
                       help="Remove Posts")
+    parser.add_option("--purge-activity",
+                      action='store_true',
+                      dest="purge_activity", default=False,
+                      help="Purge (almost) everything, including others comments, tagged photos, unliking, etc. using the activity log (do this last!)")
     parser.add_option("--page-likes",
                       action='store_true',
                       dest="clean_page_likes", default=False,
@@ -564,8 +734,8 @@ if __name__ == '__main__':
         exit(0)
 
     if not max(options.clean_posts, options.clean_photos, options.clean_page_likes,
-               options.clean_tagged_photos):
-        print "Must specify at least one action (--photos, --posts, --untag-photos, --page-likes)!"
+               options.clean_tagged_photos, options.purge_activity):
+        print "Must specify at least one action (--photos, --posts, --untag-photos, --page-likes --purge-activity)!"
         parser.print_help()
         exit(0)
 
@@ -619,3 +789,6 @@ if __name__ == '__main__':
     if options.clean_page_likes:
         fbc.clean_page_likes(max_date=options.max_date,
                              min_date=options.min_date)
+    if options.purge_activity:
+        fbc.purgeActivity(max_date=options.max_date, min_date=options.min_date)    
+    
