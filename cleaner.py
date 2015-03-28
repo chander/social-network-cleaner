@@ -37,6 +37,7 @@ import datetime
 import tzlocal
 import requests
 import sys
+import pytz
 import pprint
 import time
 import traceback
@@ -152,6 +153,37 @@ class FacebookCleaner(object):
             return True
         except TimeoutException:
             return False
+
+    def navigateHomePage(self):
+        '''
+        A simple function to navigate to the users page from the main page.
+        This goes to the activity log page, and then keeps scrolling down until
+        the entire activity log has been loaded.
+        '''
+        username = self.get_user_id()
+        logger.info(
+            "Loading the entire activity log in the browser - this can take awhile!")
+        url = 'https://www.facebook.com/'.format(username)
+        xpaths = [("//a[@title='Profile']", True,), ]
+        result = self.perform_xpaths(url, xpaths)
+        # Keep scrolling to the bottom until there's nothing left...
+        current_height = False
+        height = True
+        while height != current_height:
+            current_height = self.driver.execute_script(
+                'return document.body.scrollHeight;')
+            self._driver.execute_script(
+                "window.scrollTo(0, document.body.scrollHeight);")
+            for i in range(30):
+                height = self.driver.execute_script(
+                    'return document.body.scrollHeight;')
+                if height != current_height:
+                    break
+                time.sleep(.5)
+            time.sleep(2)
+            height = self.driver.execute_script(
+                'return document.body.scrollHeight;')
+        return result
 
     def navigateActivityLog(self):
         '''
@@ -320,7 +352,7 @@ class FacebookCleaner(object):
                 self.delete_album(album['link'])
                 deleted_albums += 1
         logger.info(
-            "There were {0} album(s) with photos removed", deleted_albums)
+            "There were %s album(s) with photos removed", deleted_albums)
 
     def photo_generator(self, max_date, min_date):
         '''
@@ -378,12 +410,6 @@ class FacebookCleaner(object):
         # or untagged
         # print post_purge
 
-    def cleanWall(self, max_date, min_date):
-        '''
-        The activity log doesn't let us remove other people's posts on
-        our wall, this will do that.
-        '''
-
     def purgeElement(self, item, post_purge=[]):
         '''
         Locate an edit button of an item, click it, and then perform
@@ -415,8 +441,8 @@ class FacebookCleaner(object):
                        ('unlike', ".//span[contains(text(), 'Unlike')]",),
                        ('unvote',
                         ".//span[contains(text(), 'Unvote')]",),
-                       ('hidden from timeline',
-                        ".//span[contains(text(), 'Hidden from Timeline')]",),
+                       #                        ('hidden from timeline',
+                       #                         ".//span[contains(text(), 'Hidden from Timeline')]",),
                        ]
         delete_xpaths = [("//span[contains(lower-case(text()), 'delete')]",
                           False,),
@@ -436,6 +462,55 @@ class FacebookCleaner(object):
                     self.perform_click(self.driver, elem2[0])
                     result = self.perform_xpaths(None, delete_xpaths)
                     return result
+
+    def cleanWall(self, max_date, min_date):
+        '''
+        Navigate to load the whole home page, then go and clean it up
+        '''
+        self.navigateHomePage()
+        # Find the parent div for stories
+        xpath_q = "//div[@data-time]"
+        child_q = ".//a[@aria-label='Story options']"
+
+        final_xpaths = [".//li[@role='presentation']//*[contains(text(), 'Remove tag')]",
+                        ".//li[@role='presentation']//*[contains(text(), 'Remove Tag')]",
+                        ".//li[@role='presentation']//*[contains(text(), 'Delete')]",
+                        ".//li[@role='presentation']//*[contains(text(), 'Hide from timeline')]",
+                        ".//li[@role='presentation']//*[contains(text(), 'Hide from Timeline')]",
+                        ]
+        delete_xpaths = [("//span[contains(lower-case(text()), 'delete')]",
+                          False,),
+                         ("//button[contains(lower-case(text()), 'delete post')]",
+                          False,),
+                         ("//button[contains(lower-case(text()), 'confirm')]",
+                          False,),
+                         ("//button[contains(lower-case(text()), 'okay')]",
+                          False,),
+                         ]
+        for item in self.driver.find_elements_by_xpath(xpath_q):
+            try:
+                item_date = datetime.datetime.fromtimestamp(
+                    int(item.get_attribute('data-time')), pytz.utc)
+                if (item_date > max_date or
+                        (min_date and item_date < min_date)):
+                    continue
+                edit = item.find_elements_by_xpath(child_q)
+                if edit:
+                    self.perform_click(self.driver, edit[0])
+                time.sleep(1)
+                elems = [e for xpathq in final_xpaths
+                         for e in self.driver.find_elements_by_xpath(
+                             xpathq) if e.is_displayed()]
+                for elem in elems:
+                    self.perform_click(self.driver, elem)
+                    time.sleep(3)
+                    result = self.perform_xpaths(
+                        None, delete_xpaths)
+                    break
+
+            except Exception, e:
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception('Failed attempt to delete story')
 
     def getOrderedActivity(self):
         self.navigateActivityLog()
