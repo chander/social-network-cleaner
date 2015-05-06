@@ -701,7 +701,8 @@ class FacebookCleaner(object):
         delay = self.delay
         self.delay = 5
         url = 'https://developers.facebook.com/tools/explorer/'
-        xpaths = [("//*[@id='get_access_token']", True,),
+        xpaths = [("//span[contains(text(), 'Get Token')]", True),
+                  ("//span[contains(text(), 'Get Access Token')]", True),
                   ("//a[contains(text(), 'Clear')]", True,),
                   ("//input[@name='user_status']", False,),
                   ("//input[@name='user_relationship']", False,),
@@ -727,7 +728,8 @@ class FacebookCleaner(object):
                     xpaths = [("//button[contains(text(), 'Okay')]", True,)]
                     self.perform_xpaths(None, xpaths)
             self.driver.switch_to_window(main_window_handle)
-        elem = self.driver.find_element_by_id("access_token")
+        elem = self.driver.find_elements_by_xpath(
+            "//span[contains(text(), 'Access Token')]/following::input[1]")[0]
         token = elem.get_attribute("value")
         self.delay = delay
         return token
