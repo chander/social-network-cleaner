@@ -14,6 +14,9 @@ This script is written in Python, so it's not necessarily for the faint of heart
 2.  Download and install [the virtualenv tool for Python](https://virtualenv.pypa.io/en/latest/)
  * On Debian / Ubuntu: `sudo apt-get install python-virtualenv`
  * On Window you might need to Google for instructions.
+ * On OS X:
+    * `sudo easy_install pip`
+    * `sudo pip install virtualenv`
 3.  Clone this repository: `git clone git@github.com:chander/social-network-cleaner.git` ([Or just download and extract the Zip](https://github.com/chander/social-network-cleaner/archive/master.zip).)
 4.  Navigate to the source directory: `cd social-network-cleaner`
 5.  Create a virtual environment: `virtualenv venv`
