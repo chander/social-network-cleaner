@@ -2,7 +2,7 @@ beautifulsoup4==4.3.2
 facebook-sdk==0.4.0
 python-dateutil==2.4.0
 pytz==2014.10
-requests==2.5.1
+requests==2.20.0
 selenium==2.45.0
 six==1.9.0
 tzlocal==1.1.2
